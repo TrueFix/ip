@@ -30,6 +30,14 @@ class PublishWorkflowTest(unittest.TestCase):
             self.assertIn("run: " + command, verification)
         self.assertNotIn("continue-on-error", verification)
 
+    def test_release_notes_use_only_version_changelog(self):
+        release = self.jobs["github-release"]
+        self.assertIn('scripts/release-notes.py "$GITHUB_REF_NAME"', release)
+        self.assertNotIn("--generate-notes", release)
+        self.assertIn('--notes-file "$RUNNER_TEMP/release-notes.md"', release)
+        self.assertIn('gh release edit "$GITHUB_REF_NAME" --notes-file', release)
+        self.assertIn('scripts/release-notes.py "$GITHUB_REF_NAME"', self.jobs["verification"])
+
     def test_latest_is_serialized_and_checked_after_version_push(self):
         self.assertIn("  group: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && 'publish-release' || format('verify-{0}', github.ref) }}\n", self.workflow)
         self.assertIn("  cancel-in-progress: false\n", self.workflow)

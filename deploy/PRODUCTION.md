@@ -97,6 +97,12 @@ Tag releases are serialized; only the numerically newest known stable Git tag
 can promote Docker `latest`. Older maintenance tags/reruns and prereleases do
 not move it backwards. Third-party Actions are SHA-pinned.
 
+GitHub release notes come only from the matching version's section in
+`CHANGELOG.md`, excluding its heading and all other versions. Missing, empty or
+duplicate version sections fail publication. Reruns refresh the same notes;
+commit-generated notes are not appended. Preview with
+`python3 scripts/release-notes.py v1.0.0`.
+
 ## Release artifacts
 
 | Artifact | Platforms | Notes |

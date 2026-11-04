@@ -70,3 +70,5 @@ Do not add per-request network calls, fabricated classification or visitor-IP st
 The single workflow verifies main pushes, manual runs and tags. Both publishing
 jobs require successful tests, audits and a production-image smoke test, and
 publish only on version-tag pushes. Only the newest known stable tag promotes latest.
+GitHub release notes use only the matching version section of CHANGELOG.md;
+scripts/release-notes.py extracts it and rejects missing/empty/duplicate sections.

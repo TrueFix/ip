@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Use only the matching `CHANGELOG.md` version section for GitHub release notes, including reruns.
+
 ## v1.0.0 — 2026-11-04
 
 - Fix loaded-snapshot integrity checks during failed replacement publications and reopen readers after atomic repair.
