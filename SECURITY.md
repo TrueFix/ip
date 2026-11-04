@@ -6,11 +6,9 @@ Credentials shared in chat or otherwise disclosed should be revoked and replaced
 before deploying publicly. Deleting a file does not remove it from Git history.
 
 For a suspected vulnerability, do not open a public issue with exploitation
-details or credentials. Once hosted on GitHub, use **Security → Report a
-vulnerability** if private reporting is enabled. Repository maintainers should
-enable private vulnerability reporting, secret scanning/push protection and
-branch protections before accepting contributions. No private reporting address
-is configured in this repository yet.
+details or credentials. Use the repository's **Security → Report a vulnerability**
+when private reporting is enabled. If unavailable, request a private contact
+without disclosing exploit details. No dedicated security email is published.
 
 ## Deployment boundary
 
@@ -22,17 +20,21 @@ is configured in this repository yet.
 - Terminate TLS at your ingress, use Cloudflare Full (strict) when applicable,
   and prevent direct origin access if Cloudflare is your security boundary.
 - Use bounded limits at the app and edge. App-local RPM budgets are not shared
-  across replicas and are not DDoS protection.
+  across replicas and are not DDoS protection. Rotating IPv6 /64s can fill the
+  client table and deny new clients; verify aggregate/prefix admission controls
+  at ingress and prevent origin bypass before public deployment.
 - Restrict data-volume writes to one updater; an OS file lock rejects overlapping
   attempts on a local filesystem. NFS/distributed filesystems need explicitly
   verified locking semantics or an external single-writer controller.
 - Keep images, dependencies, database snapshots and IANA metadata current.
+- Disabling proxy access logs does not remove client IPs/URLs from error logs.
+  Set access restrictions, retention and redaction for local and centralized logs.
 
 ## Checks
 
 `make check` runs tracking safeguards, tests, vet and Compose validation.
-`make audit` runs the pinned Go vulnerability checker. The single tag workflow
-builds/pushes the Docker image and publishes binary releases; it does not run
-automatic PR tests or audits. Run checks and the container smoke test before
-tagging. The focused commit guard does not
+`make audit` scans the application and separately built official downloader.
+The single workflow verifies main pushes, manual runs and release tags; both
+publishing jobs require tests, audits and a production-image smoke test. It is
+not a pull-request workflow. Run checks before tagging. The focused guard does not
 replace a comprehensive secret scanner; enable GitHub's scanning as well.

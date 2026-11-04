@@ -21,6 +21,8 @@ hooks:
 	git config core.hooksPath .githooks
 audit:
 	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+	go mod download github.com/maxmind/geoipupdate/v8@v8.0.0
+	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -C "$$(go env GOMODCACHE)/github.com/maxmind/geoipupdate/v8@v8.0.0" ./cmd/geoipupdate
 check: secrets test vet
 	python3 -m unittest discover -s scripts -p 'test_*.py'
 	docker compose config --quiet

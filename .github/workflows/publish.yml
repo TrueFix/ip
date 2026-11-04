@@ -1,15 +1,41 @@
 name: Publish release
 on:
   push:
+    branches: [main]
     tags: ['v*.*.*']
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: publish-${{ github.ref }}
+  # Serialize tag releases; main/manual preflights cannot displace queued releases.
+  group: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && 'publish-release' || format('verify-{0}', github.ref) }}
   cancel-in-progress: false
 jobs:
+  verification:
+    name: Tests, audit and production container smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check source and configuration
+        run: make check
+      - name: Audit dependencies
+        run: make audit
+      - name: Build production image
+        run: docker build --target production -t myip-api:ci .
+      - name: Smoke production image
+        run: SMOKE_IMAGE=myip-api:ci python3 scripts/smoke-container.py
+
   dockerhub:
     name: Docker Hub image
+    needs: verification
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -25,7 +51,6 @@ jobs:
           {
             echo 'tags<<TAGS'
             echo "mayankfawkes/ip:$GITHUB_REF_NAME"
-            if [[ "$GITHUB_REF_NAME" != *-* ]]; then echo 'mayankfawkes/ip:latest'; fi
             echo 'TAGS'
           } >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -52,9 +77,20 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+      - name: Promote newest stable version to latest
+        shell: bash
+        run: |
+          # Query every remote tag immediately before promotion, not checkout's shallow tags.
+          git ls-remote --tags --refs origin > "$RUNNER_TEMP/myip-remote-tags"
+          promote=$(python3 scripts/is-latest-release.py "$GITHUB_REF_NAME" < "$RUNNER_TEMP/myip-remote-tags")
+          if [[ "$promote" == true ]]; then
+            docker buildx imagetools create --tag mayankfawkes/ip:latest "mayankfawkes/ip:$GITHUB_REF_NAME"
+          fi
 
   github-release:
     name: Linux, macOS and Windows binaries
+    needs: verification
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:

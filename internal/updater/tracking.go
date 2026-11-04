@@ -131,10 +131,7 @@ func (u *Updater) fetch(ctx context.Context, endpoint, path string, compressed b
 			}
 		}
 	}
-	client := u.Client
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Minute}
-	}
+	client := downloadClient(u.Client, req.URL, u.IPInfoToken)
 	resp, err := client.Do(req)
 	if err != nil {
 		return errors.New("database download request failed")

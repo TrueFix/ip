@@ -1,198 +1,115 @@
 # Production and releases
 
-## Release gate
+For installation, use [DEPLOYMENT.md](../DEPLOYMENT.md). For variables, use
+[ENVIRONMENT.md](../docs/ENVIRONMENT.md). The hardened [root Compose](../compose.yml)
+adds resource limits, dropped capabilities and mounted-secret support.
 
-This repository contains production hardening, not proof that an arbitrary
-deployment is secure. Before public launch:
+## Before public deployment
 
-- Rotate every provider key previously disclosed in chat and use mounted `_FILE`
-  secrets where possible. Keep real `.env`/databases out of Git and images.
-- Review MaxMind, DB-IP, IPinfo and bundled-data terms for your public API.
-- Run `make check`, `make audit`, a production-image build and the image smoke test.
-- Configure TLS, a real certificate, allowed hosts, ingress trust, firewall,
-  Cloudflare cache bypass and edge limits for your actual deployment.
-- Scrape private metrics and load alert rules. Verify alert delivery, not just
-  Prometheus configuration. Check readiness, updater freshness and source builds.
-- Exercise a provider update, API restart and graceful shutdown in staging.
-- Keep metrics private and configure proxy/Cloudflare logging retention.
+- Use a pinned image tag or digest for both API and updater.
+- Configure HTTPS, a firewall and an ingress that sanitizes forwarded headers.
+  Trust only the actual proxy CIDRs; optionally restrict `ALLOWED_HOSTS`.
+- Keep port **9090 private**; it has no authentication. Bypass CDN caching for
+  API responses. Apply edge protection even when application limits are enabled.
+  Verify aggregate/prefix admission limits: rotating IPv6 /64s can exhaust the
+  app's client table. The Nginx example includes optional aggregate limiting.
+- Supply provider credentials only to the updater. Prefer mounted `_FILE`
+  secrets; never commit `.env`, credentials or database snapshots. Rotate any
+  disclosed key. See [secret permissions](../docs/REFERENCE.md#maxmind-default-provider).
+- Run one updater per data volume. Use a local filesystem with working locks;
+  distributed filesystems require separate verification.
+- Review [data licenses](../THIRD_PARTY.md), including attribution, refresh and
+  deletion obligations. An available download is not blanket redistribution permission.
+- Run the [checks and container smoke test](../TESTING.md). Exercise a real
+  update, restart and graceful shutdown in staging.
+- Configure private Prometheus scraping and load `deploy/alerts.yml`. Verify
+  alert delivery and updater freshness, not just API readiness.
+- Set proxy error-log access/retention/redaction; disabling access logs alone
+  does not prevent visitor IPs and request URLs from entering error logs.
 
-Docker builds/startup could not be executed in the coding session because the
-Docker daemon denied access. The tag workflow only builds/pushes images and
-publishes releases; it does not run automated audits/tests. Run the retained
-synthetic-data container smoke test manually before tagging. Local Go tests/vet/
-audit do not replace actual Docker/ingress validation.
-
-## Version control
-
-Git is initialized on `main`. No identity, remote, commit, tag or push is created
-automatically. The repository-local secret guard is enabled through
-`core.hooksPath=.githooks`; other contributors should run `make hooks`.
-
-Review the first commit carefully:
-
-```sh
-python3 scripts/check-secrets.py
-git status --short
-git add .
-git diff --cached --stat
-python3 scripts/check-secrets.py --staged
-git commit -m "Initial myip service"
-```
-
-Set your Git author identity and remote explicitly if needed; do not use a
-fabricated account. Before pushing, enable protected `main` and review requirements,
-private vulnerability reporting, secret scanning and push protection on GitHub.
-The local guard blocks common secret/data paths, even when force-added.
-
-## Versioned builds
-
-Use SemVer tags (`v0.1.0`, `v0.1.1`, etc.). Do not change API routes to `/v1`;
-release versioning is separate from the agreed HTTP endpoint paths.
-
-```sh
-make build VERSION=v0.1.0
-./bin/myip --version
-./bin/updater --version
-./bin/bench --version
-```
-
-Version, Git revision, build date and Go version are visible in `/docs`;
-`myip_build_info` exposes bounded release labels to Prometheus. Default source
-builds report `dev`/`unknown` until stamped. `make build` derives revision and
-version from Git when available and stamps a UTC build date.
-
-`make release VERSION=v0.1.0` produces one **API binary per OS/CPU target**, plus
-SHA-256 checksums in ignored `dist/`. The checked-in target list is
-`scripts/release-targets.txt`; both building and uploading use that manifest's
-outputs so new targets cannot be silently omitted from release uploads.
-
-| OS | Architectures |
-| --- | --- |
-| Linux | 386, amd64, ARMv5/v6/v7, arm64, loong64, mips, mipsle, mips64, mips64le, ppc64, ppc64le, riscv64, s390x |
-| macOS (`darwin`) | amd64 (Intel), arm64 (Apple Silicon) |
-| Windows | 386 (x86), amd64 (x64), arm64 |
-
-Assets are named `myip-v0.1.0-linux-amd64`, `myip-v0.1.0-darwin-arm64`,
-`myip-v0.1.0-windows-amd64.exe`, etc. No tar/zip archives or helper executables
-are attached. All are built with CGO disabled. Linux binaries are static, so
-separate Ubuntu/Debian/Fedora/Alpine/Arch executables are unnecessary; they still
-require compatible CPU hardware and Go 1.27's supported OS/kernel versions.
-Cross-compilation is not runtime testing on every distro. macOS/Windows binaries
-use their normal OS system facilities and are not claimed to be fully static.
-The binaries are not Developer ID-notarized or Authenticode-signed; those OSes
-may display security prompts. Verify checksums and the download source.
-
-Download the correct binary, verify its checksum, and `chmod +x` it on Unix.
-No Go compiler or distro package manager is required to run it. It needs a
-provisioned database snapshot; run the Docker updater or build the source updater
-separately for provisioning and scheduled refreshes. Docker continues to publish
-Linux amd64/arm64 images with all roles, independently of this raw-binary matrix.
-
-The only workflow is `.github/workflows/publish.yml`. On each version-tag push:
-
-1. Build one combined image for Linux amd64/arm64 and push
-   `mayankfawkes/ip:<tag>` to Docker Hub. Stable tags also update `latest`;
-   prerelease tags never replace it. Provenance/SBOM attestations are enabled.
-2. Build the raw Linux/macOS/Windows API binaries/checksums and create a **GitHub Release**, attaching
-   the files. Prerelease tags produce prereleases; reruns can replace the same
-   tag's assets.
-
-Configure repository **secrets** `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` with
-push access to `mayankfawkes/ip`. GitHub Release upload uses the job-scoped
-`GITHUB_TOKEN` with `contents: write`; no extra release token is needed.
-Metadata comes automatically from the tag, SHA and commit timestamp, not `.env`.
-No provider credentials are needed or passed to publishing builds.
-
-Tag only a reviewed commit after running local checks. There is no separate
-PR-test/audit workflow. Third-party Actions are SHA-pinned. To publish after
-committing/pushing the reviewed source:
-
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-## Docker deployment
-
-Copy `.env.example` to an ignored `.env`, fill in the chosen provider settings,
-and set `ALLOWED_HOSTS=ip.mynk.org`. Configure the exact ingress peer CIDRs and
-sanitized headers; see `deploy/nginx.conf` and the README proxy section.
-
-Download `compose.yml` and `.env.example` as shown in README.md; the server needs
-only these configuration files, not a source checkout. Pin a published version
-by setting both `image:` entries to `mayankfawkes/ip:v0.1.4`, then:
+## Validate the deployment
 
 ```sh
 docker compose config --quiet
 docker compose pull
 docker compose up -d
-docker compose logs -f updater
+docker compose logs --tail=50 updater
+curl -f http://127.0.0.1:8080/healthz
+curl -f http://127.0.0.1:8080/8.8.8.8
+docker compose exec updater updater --status
 ```
 
-Both containers pull `mayankfawkes/ip` at that tag. The API uses the default
-entrypoint; the updater uses `/usr/local/bin/updater` from the same image and
-disables the API healthcheck. Release metadata is stamped by the tag workflow,
-not runtime settings. Pin a release/image digest in your deployment inventory.
+Also test your public HTTPS origin: flag/docs URLs, spoofed forwarding headers,
+direct-origin restrictions and `429`/`Retry-After` behavior. Do not load-test a
+public endpoint without authorization.
 
-For source development only, build locally with
-`docker build --target production -t mayankfawkes/ip:dev .`, then run
-set both Compose `image:` entries to `mayankfawkes/ip:dev` and run
-`docker compose up -d --pull never`. This is not needed on servers.
+## Rate limiting
 
-The API runs non-root, with a read-only filesystem/data mount, dropped
-capabilities and bounded resources. Only the updater writes the persistent
-database volume. Compose grants 30 seconds for clean shutdown; HTTP requests
-are drained within the app's 15-second shutdown deadline.
-
-The API's published port is loopback-only by default. Port 9090 is not published.
-For a containerized ingress, attach it to a dedicated network with known proxy
-addresses rather than trusting every private IP. Configure HTTPS separately.
-
-## Validation and rollback
-
-```sh
-curl -f https://ip.mynk.org/healthz
-curl -i https://ip.mynk.org/122.168.197.166
-curl -f https://ip.mynk.org/docs
-docker compose exec api bench -ip 122.168.197.166 -n 10000
-```
-
-Check local flags/docs links use the public HTTPS origin. Test direct-origin
-requests and spoofed forwarding headers against your actual ingress. Verify
-RPM `429` responses and `Retry-After` without flooding the public service.
-
-Record the deployed commit/image digest, provider mode, schema and configuration
-changes. For code rollback, redeploy the previously verified image/commit while
-preserving the data volume; schema compatibility must be checked before rollback.
-Do not use `docker compose down -v` as a normal upgrade/rollback step: it removes
-the databases and causes cold-start downtime.
-
-Database update failures preserve the last working snapshot and readers.
-Unreferenced snapshots are cleaned after the documented grace period. An updater
-crash releases the OS lock automatically; a leftover `.updater.lock` filename is
-normal and must not be deleted to force another active writer to run. Avoid
-indefinite database backups that violate provider deletion requirements.
-
-Audit metadata is persisted in `/data/state.sqlite`; back it up only while the
-updater is stopped, or use a proper SQLite backup tool. Do not copy a live SQLite
-file blindly. It contains no visitor IPs or credentials, but is still excluded
-from Git/images. The private `:9090/databases` endpoint exposes current inventory
-and integrity status without opening SQLite in the API. `updater --status`
-reads the latest 20 persisted attempts. Schema changes require backup/rollback
-planning separately from MMDB snapshot compatibility.
-
-Rate limits are process-local memory budgets. Restarting resets them; multiple
-replicas do not share a global quota. Keep edge controls or introduce a shared
-limiter if a globally enforced quota is required. SQLite audits are not a
-distributed rate-limit implementation.
-
-| Variable | Default | Operational effect |
+| Variable | Default | Effect |
 | --- | --- | --- |
-| `RATELIMIT_ENABLE` | `true` | Set `false` to bypass RPM, RPS and client-capacity limits without tracking client buckets. Does not disable edge limits. |
-| `RATE_LIMIT_RPM` | `300` | Rolling-minute budget when enabled; `0` admits no rate-limited requests (HTTP 429). Only the boolean switch disables limiting. |
+| `RATELIMIT_ENABLE` | `true` | `false` bypasses all built-in limits and client tracking |
+| `RATE_LIMIT_RPM` | `300` | Rolling-minute budget; `0` rejects rate-limited requests when enabled |
 
-After changing `.env`, run `docker compose up -d` to recreate the API container.
-Re-enable with `RATELIMIT_ENABLE=true` and positive RPM. Other rate-limit settings
-are still validated when disabled. Deploy **v0.1.4 or newer**; older releases
-ignore the switch. Verify the deployed version before relying on the setting.
-See [all rate-limit settings](../docs/ENVIRONMENT.md#5-rate-limiting--no-authentication).
+Changes to `.env` need `docker compose up -d`, not just a container restart.
+Limits are per-process memory budgets, reset on restart and are not shared
+between replicas. Edge limits remain independent. See the
+[complete settings](../docs/ENVIRONMENT.md#5-rate-limiting--no-authentication).
+
+## Updates and rollback
+
+Keep the same deployment directory and data volume. Do **not** use
+`docker compose down -v` for an upgrade: it deletes the databases.
+
+Record the deployed image digest, provider and configuration. To roll back code,
+set both Compose `image:` entries to the previously verified release and run
+`docker compose up -d`. Check SQLite/manifest compatibility before downgrading.
+
+Failed updates retain the previous published snapshot. A leftover updater lock
+filename is normal; never delete it to bypass an active writer. Back up
+`state.sqlite` with the updater stopped or through a SQLite-aware backup tool.
+Do not copy a live SQLite file blindly or retain provider data indefinitely.
+
+## Release checklist
+
+1. Review code, dependencies, licenses and the changelog. Enable branch
+   protection, private vulnerability reporting and secret scanning in GitHub.
+2. Run `make check`, `make audit`, the image smoke test and workflow actionlint.
+   Push the reviewed commit to `main` and wait for the verification job to pass
+   before tagging. Main/manual runs verify only; they do not publish artifacts.
+3. Cross-build/checksum all targets with `make release VERSION=v1.0.0`.
+4. Commit the reviewed changes, create the SemVer tag, and push atomically:
+
+   ```sh
+   git tag -a v1.0.0 -m 'Release v1.0.0'
+   git push --atomic origin main refs/tags/v1.0.0
+   ```
+
+5. Verify both publishing jobs, Docker tags, GitHub assets and checksums. Test
+   the published image before promoting it to your deployment.
+
+The single [workflow](../.github/workflows/publish.yml) verifies main pushes,
+manual dispatches and release tags. Both publishing jobs depend on successful
+tests, audits and a production-image smoke test, and run only on tag pushes.
+Docker publishing needs repository secrets `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN`; release uploads use `GITHUB_TOKEN`. Provider credentials are
+not build inputs. There is no separate pull-request workflow.
+Tag releases are serialized; only the numerically newest known stable Git tag
+can promote Docker `latest`. Older maintenance tags/reruns and prereleases do
+not move it backwards. Third-party Actions are SHA-pinned.
+
+## Release artifacts
+
+| Artifact | Platforms | Notes |
+| --- | --- | --- |
+| `mayankfawkes/ip` image | Linux amd64/arm64 | Same image for API, updater and benchmark commands |
+| Raw API binaries | 15 Linux variants, macOS Intel/ARM64, Windows x86/x64/ARM64 | One executable per target plus SHA-256 checksums; no archives/helpers |
+
+The [target manifest](../scripts/release-targets.txt) is authoritative. Linux
+binaries are CGO-disabled/static and do not need distro-specific libc packages,
+but still need compatible hardware and supported kernels. macOS/Windows builds
+are not notarized/Authenticode-signed. Cross-builds are not native runtime tests.
+Raw API binaries need a provisioned snapshot and a separate updater process;
+native MaxMind updates also require the official `geoipupdate` executable.
+
+Version metadata is available through `--version`, `/docs` and
+`myip_build_info`. Build locally with `make build VERSION=v1.0.0`.

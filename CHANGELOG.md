@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.0 — 2026-11-04
+
+- Fix loaded-snapshot integrity checks during failed replacement publications and reopen readers after atomic repair.
+- Normalize IPv4-mapped trusted-proxy CIDRs and consistently hide private status routes on the public listener.
+- Restrict download redirects to HTTPS and approved hosts, suppress credential-bearing referrers, and reclaim definitely unpublished snapshots after late failures.
+- Precompute country/flag metadata and cache timezone locations with bounded storage while preserving current DST calculations.
+- Gate publishing on tests, dependency audits and production-container smoke checks; verify main/manual runs without publishing.
+- Prevent older stable releases from downgrading Docker `latest`; add command lifecycle and failure-path tests.
+- Consolidate operational documentation, remove historical session notes, and add one root `llms.txt` guide.
+- Publish measured lookup/enrichment benchmarks with reproduction details, and validate documentation links in tests.
+
 ## v0.1.4 — 2026-11-04
 
 - Add `RATELIMIT_ENABLE` (default `true`) to disable all built-in limiting with `false`.

@@ -262,8 +262,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]bool{"success": true})
 		return
 	}
-	// Metrics are intentionally only served on a separate, unpublished listener.
-	if r.URL.Path == "/metrics" {
+	// Monitoring is intentionally only served on a separate, unpublished listener.
+	if r.URL.Path == "/metrics" || r.URL.Path == "/databases" {
 		fail(w, 404, "Not found")
 		return
 	}

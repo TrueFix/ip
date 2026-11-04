@@ -1,0 +1,72 @@
+# myip
+
+> Self-hosted Go IP information API. All request-time lookups use local MMDB
+> databases; only the separate updater contacts data providers.
+
+Repository: https://github.com/TrueFix/ip
+Go module: github.com/TrueFix/myip (intentionally different from repository name).
+Docker image: mayankfawkes/ip. The same image runs API, updater or benchmark commands.
+
+## Documentation
+
+- [README](README.md): overview and credential-free quick start.
+- [Deployment](DEPLOYMENT.md): standalone DB-IP/MaxMind Compose installation.
+- [Environment](docs/ENVIRONMENT.md): complete variable tables by source/purpose.
+- [API reference](docs/REFERENCE.md): response contract, source selection, proxies and storage.
+- [Production](deploy/PRODUCTION.md): hardening, updates, rollback and releases.
+- [Testing](TESTING.md): checks, smoke test and benchmarks.
+- [Security](SECURITY.md): reporting and deployment boundaries.
+- [Contributing](CONTRIBUTING.md): development rules.
+- [Data licensing](THIRD_PARTY.md): attribution and provider terms.
+- [Changelog](CHANGELOG.md): release history.
+
+## Contract
+
+- Public routes: /, /<public-ip>, /healthz, /docs, /flags/<country>.svg,
+  /country-data.json on port 8080. HEAD and CORS preflight are supported.
+- Private /metrics and /databases on port 9090 have no authentication; never
+  publish them unprotected. There is no HTML frontend or API-key authentication.
+- Missing data remains null. Postal codes are excluded. Flag/docs URLs follow
+  validated request origin; BASE_URL and DOCS_URL are obsolete.
+- dbip mode: DB-IP City/ASN only; no credentials.
+- maxmind mode: MaxMind primary plus DB-IP fallback; updater requires account ID
+  and license key. Fallback selects whole location records, not mixed coordinates.
+- IPinfo Lite is optional enrichment in maxmind mode, requiring a download token.
+  Enrichment must not merge conflicting ASNs. ISP_FROM_ASN uses the downloaded
+  IPinfo operator name as an ISP approximation, not a verified retail ISP.
+- No VPN, proxy, Tor, cloud or residential classification is implemented.
+- RATELIMIT_ENABLE=false is the only switch to bypass all built-in limiting.
+  When enabled, RATE_LIMIT_RPM=0 admits zero rate-limited requests. Readiness,
+  private monitoring and CORS preflight are exempt. Limits are process-local;
+  IPv6 /64 addresses share a budget. They do not persist visitor IPs to SQLite.
+
+## Architecture and operations
+
+- internal/httpapi: HTTP, proxy/origin validation, limiter and Prometheus.
+- internal/geo: MMDB readers, response enrichment and atomic reader reloads.
+- internal/updater: staged downloads, writer lock and snapshot publication.
+- internal/inventory and internal/audit: checksums and SQLite update history.
+- DATA_DIR defaults to ./data locally and /data in Docker. API mounts it read-only;
+  one updater writes it. current.json selects an immutable versioned snapshot.
+- API does not need provider credentials and makes no external lookup requests.
+  Never read, print or commit real .env, secrets, production data or database files.
+- Trust only actual ingress CIDRs and sanitized forwarding headers. ALLOWED_HOSTS
+  restricts response origins; it is not authentication. Keep metrics private.
+- Docker image tags, published ports and mounts are edited directly in Compose,
+  not through Docker-only environment variables. Environment forwarding differs
+  between simple templates and hardened root Compose; consult the variable guide.
+- Never use docker compose down -v for a normal upgrade. Preserve the data volume.
+- Releases contain 20 raw API executables plus SHA-256 checksums, no archives or
+  helper executables. The target list is scripts/release-targets.txt. Raw binaries
+  need provisioned databases and a separate updater. Native MaxMind updates need
+  geoipupdate. Cross-compilation is not native runtime verification.
+
+## Development
+
+Use the Go version in go.mod, Python 3 and Docker Compose v2. Run make check,
+make audit and the container smoke test before tagging; see TESTING.md.
+Keep source attribution and nullability intact. Use synthetic fixtures for tests.
+Do not add per-request network calls, fabricated classification or visitor-IP storage.
+The single workflow verifies main pushes, manual runs and tags. Both publishing
+jobs require successful tests, audits and a production-image smoke test, and
+publish only on version-tag pushes. Only the newest known stable tag promotes latest.

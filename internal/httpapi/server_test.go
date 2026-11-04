@@ -156,8 +156,8 @@ func TestRoutes(t *testing.T) {
 		t.Fatal("private inventory endpoint missing")
 	}
 	public := request(h, "/databases")
-	if public.Code == 200 {
-		t.Fatal("inventory exposed on public API")
+	if public.Code != 404 {
+		t.Fatalf("public inventory status = %d, want 404", public.Code)
 	}
 }
 func TestFailureStatus(t *testing.T) {
@@ -234,5 +234,30 @@ func TestConfigRejectsNaNAndTrustAllIsExplicit(t *testing.T) {
 	}
 	if len(c.TrustedProxies) != 0 {
 		t.Fatal("trusted proxies enabled by default")
+	}
+}
+
+func TestPublicMonitoringPathsAlwaysHidden(t *testing.T) {
+	for _, rpm := range []int{0, 300} {
+		c := testConfig(t)
+		c.RPM = rpm
+		s := New(c, fakeStore{ready: false})
+		for _, path := range []string{"/metrics", "/databases"} {
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				r := httptest.NewRequest(method, path, nil)
+				r.RemoteAddr = "8.8.8.8:12345"
+				w := httptest.NewRecorder()
+				s.Handler().ServeHTTP(w, r)
+				if w.Code != http.StatusNotFound {
+					t.Errorf("RPM %d, %s %s: status %d, want 404", rpm, method, path, w.Code)
+				}
+				if w.Header().Get("Retry-After") != "" {
+					t.Errorf("%s unexpectedly rate limited", path)
+				}
+			}
+		}
+		if stats := s.limiter.Stats(); stats.Clients != 0 || stats.DeniedRPM != 0 {
+			t.Fatalf("monitoring paths reached limiter: %+v", stats)
+		}
 	}
 }

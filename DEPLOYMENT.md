@@ -96,7 +96,7 @@ docker compose up -d
 ```
 
 To pin a release instead of `latest`, edit **both** `image:` entries in
-`compose.yml`, for example to `mayankfawkes/ip:v0.1.4`. Host port, bind address
+`compose.yml`, for example to `mayankfawkes/ip:v1.0.0`. Host port, bind address
 and storage are configured directly in Compose, not through `.env`.
 
 ### Optional · Enable or disable rate limiting

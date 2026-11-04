@@ -123,6 +123,16 @@ Limits are per process, reset on restart, and group IPv6 addresses by /64.
 No rate-limit visitor IPs are written to SQLite. Keep edge-level protection for
 a public service, especially if you disable application limits.
 
+**Memory sizing:** rolling-minute timestamp storage can grow to roughly
+`RATE_LIMIT_MAX_CLIENTS × RATE_LIMIT_RPM × 8` bytes, plus maps, buckets and any
+RPS state. Default settings permit about 120 MB of timestamp payload alone.
+Allocation grows with traffic, not at startup; database mappings and reloads also
+need memory. Do not increase both limits without measuring the deployment's
+peak memory and ensuring container limits can accommodate it.
+An attacker able to rotate many IPv6 /64s can exhaust client capacity. Use
+aggregate/prefix admission controls at ingress and prevent direct-origin bypass;
+raising client capacity alone is not DDoS protection.
+
 ## 6. Proxy, hostname and browser settings — no authentication
 
 | Variable | Default | Purpose |

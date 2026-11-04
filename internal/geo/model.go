@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/TrueFix/myip/internal/assets"
@@ -65,6 +66,57 @@ type Country struct {
 
 var countries map[string]Country
 var singleTimezones map[string]string
+var countryBorders map[string]string
+var flagImages map[string]string
+
+// Cache successes and failures, including aliases absent from zone.tab. A fixed
+// FIFO bounds both entries and retained key bytes even for malformed MMDB data.
+// Locations contain transition rules, not a cached current offset or DST value.
+const timezoneCacheSize = 512
+const maxTimezoneNameBytes = 256
+
+type locationCache struct {
+	mu      sync.RWMutex
+	entries map[string]*time.Location
+	keys    [timezoneCacheSize]string
+	next    int
+}
+
+var timezoneLocations locationCache
+
+func (c *locationCache) load(name string) *time.Location {
+	if len(name) > maxTimezoneNameBytes {
+		return nil
+	}
+	c.mu.RLock()
+	loc, ok := c.entries[name]
+	c.mu.RUnlock()
+	if ok {
+		return loc
+	}
+	// Serialize cold loads to avoid duplicate filesystem work on concurrent misses.
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if loc, ok := c.entries[name]; ok {
+		return loc
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		loc = nil
+	}
+	if c.entries == nil {
+		c.entries = make(map[string]*time.Location)
+	}
+	if len(c.entries) == timezoneCacheSize {
+		delete(c.entries, c.keys[c.next])
+	}
+	// Do not retain a much larger backing string through a short substring key.
+	name = strings.Clone(name)
+	c.keys[c.next] = name
+	c.next = (c.next + 1) % timezoneCacheSize
+	c.entries[name] = loc
+	return loc
+}
 
 func init() {
 	b, err := assets.Files.ReadFile("countries.json")
@@ -78,6 +130,31 @@ func init() {
 	countries = make(map[string]Country, len(list))
 	for _, c := range list {
 		countries[c.CCA2] = c
+	}
+	alpha2 := make(map[string]string, len(list))
+	for _, c := range list {
+		alpha2[c.CCA3] = c.CCA2
+	}
+	countryBorders = make(map[string]string, len(list))
+	for _, c := range list {
+		var borders []string
+		for _, border := range c.Borders {
+			if code, ok := alpha2[border]; ok {
+				borders = append(borders, code)
+			}
+		}
+		sort.Strings(borders)
+		countryBorders[c.CCA2] = strings.Join(borders, ",")
+	}
+	flags, err := assets.Files.ReadDir("flags")
+	if err != nil {
+		panic(err)
+	}
+	flagImages = make(map[string]string, len(flags))
+	for _, flag := range flags {
+		if !flag.IsDir() && strings.HasSuffix(flag.Name(), ".svg") {
+			flagImages[strings.ToUpper(strings.TrimSuffix(flag.Name(), ".svg"))] = "/flags/" + flag.Name()
+		}
 	}
 	zones, err := assets.Files.ReadFile("zone.tab")
 	if err != nil {
@@ -121,26 +198,15 @@ func enrich(r *Response, now time.Time) {
 				calling += c.IDD.Suffixes[0]
 			}
 			r.CallingCode = str(calling)
-			borders := []string{}
-			for _, b := range c.Borders {
-				for _, other := range countries {
-					if other.CCA3 == b {
-						borders = append(borders, other.CCA2)
-						break
-					}
-				}
-			}
-			sort.Strings(borders)
-			joined := strings.Join(borders, ",")
+			joined := countryBorders[code]
 			r.Borders = &joined
 		}
 		if len(code) == 2 && code[0] >= 'A' && code[0] <= 'Z' && code[1] >= 'A' && code[1] <= 'Z' {
 			a, b := rune(0x1F1E6)+rune(code[0]-'A'), rune(0x1F1E6)+rune(code[1]-'A')
 			r.Flag.Emoji = str(string([]rune{a, b}))
 			r.Flag.Unicode = str(fmt.Sprintf("U+%X U+%X", a, b))
-			path := "flags/" + strings.ToLower(code) + ".svg"
-			if _, err := assets.Files.ReadFile(path); err == nil {
-				r.Flag.Image = str("/" + path)
+			if path, ok := flagImages[code]; ok {
+				r.Flag.Image = str(path)
 			}
 		}
 		// Membership is country metadata, independent of the geolocation provider.
@@ -148,7 +214,7 @@ func enrich(r *Response, now time.Time) {
 		r.IsEU = &eu
 	}
 	if r.Timezone.ID != nil {
-		if loc, err := time.LoadLocation(*r.Timezone.ID); err == nil {
+		if loc := timezoneLocations.load(*r.Timezone.ID); loc != nil {
 			t := now.In(loc)
 			abbr, offset := t.Zone()
 			dst := t.IsDST()

@@ -42,6 +42,11 @@ func LoadConfig() (Config, error) {
 			if err != nil {
 				return c, fmt.Errorf("invalid trusted proxy CIDR")
 			}
+			// Client IP parsing unmaps IPv4-in-IPv6 addresses. Normalize a
+			// prefix wholly inside the mapped /96 to the same IPv4 space.
+			if p.Addr().Is4In6() && p.Bits() >= 96 {
+				p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+			}
 			c.TrustedProxies = append(c.TrustedProxies, p.Masked())
 		}
 	}

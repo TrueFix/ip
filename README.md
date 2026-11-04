@@ -7,7 +7,8 @@
 <p align="center">
   <a href="docs/REFERENCE.md">Documentation</a> ·
   <a href="DEPLOYMENT.md">Deployment</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a>
+  <a href="docs/ENVIRONMENT.md">Configuration</a> ·
+  <a href="llms.txt">LLM guide</a>
 </p>
 
 ## ✨ Small API. Solid foundations.
@@ -42,16 +43,16 @@ Source-specific `.env` examples and every setting explained:
 [Environment variables](docs/ENVIRONMENT.md).
 
 Both containers use **[mayankfawkes/ip](https://hub.docker.com/r/mayankfawkes/ip)**
-(amd64/arm64). Pin a release by editing both Compose image tags; otherwise `latest` selects
-the latest stable release. Images become available after the first version-tag push.
+(amd64/arm64). Pin a release by editing both Compose image tags; `latest` tracks
+stable releases.
 
 ### Choose your data
 
-| Setting | Behavior |
-| --- | --- |
-| [MaxMind template](deploy/compose.maxmind.yml) | MaxMind primary + DB-IP fallback; account ID and license key required. |
-| [DB-IP template](deploy/compose.dbip.yml) | DB-IP only; no account needed. |
-| `IPINFO_ENABLED=true` | Optional network enrichment in MaxMind mode; free IPinfo token required. |
+| Source | Authentication | Role |
+| --- | --- | --- |
+| [DB-IP](deploy/compose.dbip.yml) | None | Standalone location + ASN |
+| [MaxMind](deploy/compose.maxmind.yml) | Account ID + license key | Primary location + ASN, with DB-IP fallback |
+| Optional IPinfo Lite | Download token, plus MaxMind credentials | Network/domain enrichment |
 
 Locations are approximate. Missing data stays `null`—never guessed.
 See the [configuration guide](docs/REFERENCE.md#configuration) for credentials and options.
@@ -80,9 +81,28 @@ Keep `.env`, tokens and downloaded data out of Git. Data defaults to `./data` lo
 
 Follow the [production checklist](deploy/PRODUCTION.md) before exposing the service.
 
+## ⚡ Benchmarks
+
+Warm local lookups on **AMD Ryzen 7 5800XT, Linux amd64, Go 1.27.3**
+(2026-11-04), using a downloaded MaxMind + DB-IP + IPinfo snapshot and the normal
+lookup path. Median of three runs per IP: 10,000 lookups after 1,000 warm-ups.
+
+| IP / sample | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: |
+| `8.8.8.8` | 8.62 µs | 12.46 µs | 19.00 µs |
+| `1.1.1.1` | 7.07 µs | 9.23 µs | 13.72 µs |
+| IPv6 Airtel sample | 7.31 µs | 9.90 µs | 14.07 µs |
+
+Precomputed country/flag metadata and a bounded timezone cache reduced a separate
+warm mixed-enrichment benchmark from **13.49 µs to 0.58 µs/op** (6,293 → 214 B/op).
+That improvement is enrichment-only, not a 23× speedup for the entire API.
+
+These exclude HTTP/JSON, network, startup and downloads; they are **not HTTP
+throughput or production latency guarantees**. See [reproduction commands](TESTING.md#benchmarking).
+
 ## 🛠️ Development
 
-Requires Go 1.27+ and Python 3.
+Requires the Go version in `go.mod` and Python 3.
 
 ```bash
 make hooks
@@ -90,7 +110,7 @@ make check
 make audit
 ```
 
-For local runs, benchmarks, SQLite history and the full response schema, see the [reference](docs/REFERENCE.md).
+See [testing](TESTING.md), [contributing](CONTRIBUTING.md) and the [API reference](docs/REFERENCE.md).
 
 Prefer binaries? [GitHub Releases](https://github.com/TrueFix/ip/releases) provide
 raw API executables and SHA-256 checksums—no archives or helper executables.

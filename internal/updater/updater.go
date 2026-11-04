@@ -218,6 +218,11 @@ func (u *Updater) Run(ctx context.Context) (result error) {
 	if err := os.Rename(stage, filepath.Join(u.Dir, version)); err != nil {
 		return err
 	}
+	defer func() {
+		if result != nil {
+			u.discardUnpublished(version)
+		}
+	}()
 	m := geo.Manifest{Version: version, Provider: u.Provider, UpdatedAt: time.Now().UTC(), Files: files, AuditRunID: runID}
 	if u.Provider == "maxmind" {
 		m.Hybrid = true
@@ -236,6 +241,26 @@ func (u *Updater) Run(ctx context.Context) (result error) {
 	status.AuditRunID = runID
 	u.cleanup(version)
 	return nil
+}
+
+// Reclaim a failed staged publication only when the serving manifest proves it
+// is not active. AtomicJSON can rename successfully and then fail directory sync;
+// in that case the snapshot must remain available even though Run returns error.
+func (u *Updater) discardUnpublished(version string) {
+	if !geo.ValidVersion(version) {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(u.Dir, "current.json"))
+	if err == nil {
+		var current geo.Manifest
+		if json.Unmarshal(b, &current) != nil || !geo.ValidVersion(current.Version) || current.Version == version {
+			return
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		// An unreadable/ambiguous publication is not evidence it is unused.
+		return
+	}
+	_ = os.RemoveAll(filepath.Join(u.Dir, version))
 }
 
 func (u *Updater) prepareFallback(ctx context.Context, destination string, current geo.Manifest, month string) error {

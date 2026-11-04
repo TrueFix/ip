@@ -1,139 +1,95 @@
-# Local verification
+# Testing
 
-Verified on 2026-11-04:
+Requires the Go version in `go.mod`, Python 3, and Docker Compose v2.
+Tests use synthetic or upstream test fixtures, not production credentials.
 
-- v0.1.4 pre-release checks: `make check`, `make audit`, workflow actionlint,
-  documentation links/anchors, and all 20 raw-binary cross-builds/checksums passed.
-  Native execution on macOS/Windows and container startup were not reverified.
+## Required checks
 
-- `go test -race -cover ./...` — passed.
-- `go vet ./...` — passed.
-- `go build ./cmd/...` — passed.
-- `docker compose config --quiet` — passed.
-- Real DB-IP Lite City + ASN download, validation and publication — passed.
-- Real MaxMind City + ASN download through official geoipupdate v8.0.0 — passed.
-- A second MaxMind updater run using the existing snapshot — passed.
-- Opt-in live-snapshot race tests for both providers — passed.
-- HTTP smoke tests: IPv4/IPv6, readiness, private metrics, trusted-proxy caller
-  detection, personalized-response cache headers, and response schema — passed.
-- The example IPv6 resolved to Bhopal/MP, ASN 24560, Asia/Kolkata using the
-  downloaded MaxMind snapshot. Values may change as upstream databases change.
-- Hybrid MaxMind updater published a validated four-file snapshot with DB-IP
-  fallback. `122.168.197.166` selected Gwalior/Madhya Pradesh with DB-IP's
-  coordinates, preserved compatible `Asia/Kolkata`, and did not retain unrelated
-  primary location data. `1.1.1.1` selected DB-IP's Sydney estimate with no inferred
-  timezone. The original IPv6 kept its primary Bhopal/MP record.
-- Hybrid responses included attribution for both sources and exposed fallback
-  database build metrics. Unit tests cover whole-record selection, timezone
-  conflicts, primary-city preservation and DB-IP-only isolation.
-- Subdivision enrichment maps Madhya Pradesh to `MP` without an additional IP
-  database download. Tests cover country scoping, case/whitespace/diacritic normalization,
-  ambiguous names, administrative levels and preserving provider-supplied codes.
-- Runtime configuration no longer includes base/docs URLs. Unit tests verify
-  per-request HTTP/HTTPS/IPv6/port origins, trusted versus spoofed forwarded
-  host/scheme, host allowlists and multiple hostnames on the same server.
-- RPM is a strict rolling-minute budget, with optional RPS token-bucket limits.
-  Tests cover expiration boundaries, ring growth/wrap, denied-request accounting,
-  IPv6 aggregation and capacity limits.
-- API and updater share an optional `DATA_DIR`, defaulting to `./data` locally
-  and `/data` in Docker. A live update with the new two-setting credentials
-  successfully populated the default local directory, and HTTP smoke tests
-  verified request-specific URLs and strict RPM `429`/`Retry-After` behavior.
-  Credential tests cover missing values, invalid/typoed
-  providers, environment/file conflicts, configuration injection, private
-  temporary files and cleanup. DB-IP does not read MaxMind secrets.
-- Optional IPinfo integration tests use **synthetic** MMDB records, covering
-  matching/mismatching ASNs, domain validation, optional operator-as-ISP naming,
-  and all-source timing probes without changing the chosen location. Download
-  errors are checked to ensure tokens never appear in returned errors.
-- The official IPinfo Lite **sample** schema can be validated with
-  `MYIP_TEST_IPINFO_FILE=/path/to/sample.mmdb go test ./internal/geo -run TestLiveIPInfoSample`.
-  A sample/synthetic fixture is not a full-database performance result.
-- The full IPinfo Lite database was subsequently downloaded and validated with
-  a locally supplied token. All-three-source measurements are listed below;
-  the benchmark still refuses to mislabel an incomplete two-source snapshot.
-- Git tracking guards and their unit tests pass. Release metadata is stamped in
-  build outputs, version commands, `/docs` and Prometheus. Regression tests cover
-  local metrics privacy, updater writer exclusion, missing fallback repair and
-  snapshot-name validation. A manual non-root/read-only container smoke test is available.
-- Module/import/linker paths now use `github.com/TrueFix/myip`. Tests, vet,
-  vulnerability checks and CGO-disabled API/updater builds pass after the rename.
-- Two real five-file updates populated `data/state.sqlite`, with prepared/success
-  audit records, source build/check/download times, byte sizes, validators and
-  64-character SHA-256 values in both SQLite and the active manifest. The repeat
-  run reported MaxMind unchanged and DB-IP/IPinfo `not_modified` (HTTP 304).
-- Live API startup verified all five checksums. Private `/databases`, the
-  read-only `updater --status` CLI, per-file freshness metrics and the loaded vs
-  published snapshot gauge passed. No SQLite access was added to public lookups.
-- Regression tests cover conditional 304 reuse, same-month correction fetching,
-  corrupt-cache repair, loaded-file corruption causing `503`, restoration,
-  missing/invalid inventories, audit crash recovery, missing audit-history
-  rejection, bounded retention preserving the active snapshot, and process-local
-  rate-limit metrics. Tests do not assert publisher-signature authenticity.
-- Rate-limit switch tests cover default/explicit enablement, disabling with
-  positive RPM/RPS settings, bypassing client capacity without tracking clients,
-  invalid boolean rejection, and forwarding `RATELIMIT_ENABLE=false` through all
-  supplied Compose templates. Zero RPM rejects every rate-limited request when
-  enabled; the boolean disable switch bypasses even a zero budget.
-- The response schema no longer contains `postal`; serialization tests enforce
-  its absence even when source databases contain a postal code.
-- There is one workflow, `publish.yml`, with Docker Hub publishing and GitHub
-  Release jobs. Its syntax passes actionlint. Local release builds succeeded for
-  20 OS/CPU targets: 15 Linux variants, two macOS targets and three Windows targets.
-  All raw-binary checksums passed. ELF/Mach-O/PE headers matched their advertised
-  architectures; Linux files had no dynamic interpreter. Releases contain one
-  API executable per target plus a checksum file, with no archives/helpers.
-  Native Linux amd64 `--version` execution passed. These are cross-compilation
-  checks, not native macOS/Windows tests or coverage of every distribution/CPU.
+```sh
+make check
+make audit
+go build ./cmd/...
+go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/publish.yml
+git diff --check
+```
 
-Warm baseline for `122.168.197.166` on this development machine, 10,000 measured
-iterations after 1,000 warm-ups, **MaxMind + DB-IP only**, normal lookup path:
+`make check` runs the secret/data tracking guard, Go race tests, `go vet`, Python
+tests and Compose validation. `make audit` scans both the application and the
+separately built official `geoipupdate` command using the pinned vulnerability checker.
+Compose validation does not require a running daemon; container checks do.
 
-| Stage | Mean µs | p50 µs | p95 µs | p99 µs |
-| --- | ---: | ---: | ---: | ---: |
-| MaxMind | 3.36 | 3.15 | 4.24 | 7.51 |
-| DB-IP | 3.96 | 3.65 | 5.15 | 8.23 |
-| Combined lookup + enrichment | 23.15 | 21.92 | 29.49 | 49.95 |
-
-Full **MaxMind + DB-IP + IPinfo Lite** snapshot, same IP and iteration counts,
-with forced probes of all providers (including both City/ASN pairs):
-
-| Stage | Mean µs | p50 µs | p95 µs | p99 µs |
-| --- | ---: | ---: | ---: | ---: |
-| MaxMind | 3.39 | 3.16 | 4.18 | 7.37 |
-| DB-IP | 4.42 | 4.06 | 5.82 | 8.85 |
-| IPinfo | 0.53 | 0.51 | 0.68 | 0.95 |
-| Combined lookup + enrichment | 24.81 | 23.45 | 31.57 | 52.76 |
-
-These measurements exclude startup/download time, JSON, HTTP/proxy overhead and
-network latency. They do not predict mixed-IP capacity on production hardware.
-
-**Not verified locally:** Docker image builds and container startup. Docker
-daemon access was denied for this session. Base image tags resolve in the
-registry and the pinned geoipupdate Go module cross-builds locally. The tag
-workflow is configured to build/push `mayankfawkes/ip` and create a GitHub Release;
-neither remote operation has been executed from this session. Run these checks
-on a Docker-capable host before launch:
+## Container smoke test
 
 ```sh
 docker build --target production -t mayankfawkes/ip:dev .
 SMOKE_IMAGE=mayankfawkes/ip:dev python3 scripts/smoke-container.py
-# Set both image: entries in your local Compose file to mayankfawkes/ip:dev.
-docker compose up -d --pull never
-docker compose logs updater
-curl http://127.0.0.1:8080/healthz
-curl http://127.0.0.1:8080/8.8.8.8
 ```
 
-Also verify the real deployment's TLS, proxy CIDRs, Cloudflare cache bypass,
-firewall, data-license requirements and Prometheus alerts. Local HTTP tests do
-not validate your ingress configuration.
+The smoke test uses synthetic databases to check the non-root/read-only image,
+readiness, lookups and private monitoring. Test real provider downloads separately
+with private credentials. Do not publish logs containing credentials.
 
-Credentials used for local testing are kept in ignored `.env` (mode 0600) and
-the legacy ignored `secrets/GeoIP.conf`. That directory/file use host-user
-permissions, not container UID 65532 ownership.
-The file remains usable through the explicit legacy `GEOIPUPDATE_CONFIG_FILE`
-option. Prefer the new two-setting credentials or `_FILE` secret configuration
-described in README.md for deployment. Revoke the chat-exposed key after testing
-and replace it before deployment. Test databases can be in temporary storage or
-the ignored local `data/` directory; neither is part of the published image.
+## Release binaries
+
+```sh
+make release VERSION=v1.0.0
+(cd dist && sha256sum -c SHA256SUMS-v1.0.0.txt)
+./dist/myip-v1.0.0-linux-amd64 --version
+```
+
+The [target manifest](scripts/release-targets.txt) defines 20 raw API executables.
+Cross-compilation and checksums do not establish native runtime support for
+every OS/CPU. Test on target systems before claiming native compatibility.
+
+## Optional local snapshot tests
+
+These read an existing snapshot without fetching provider data:
+
+```sh
+MYIP_TEST_DATA_DIR=/path/to/data MYIP_TEST_PROVIDER=maxmind \
+  go test -race ./internal/geo -run TestLiveSnapshot -v
+MYIP_TEST_IPINFO_FILE=/path/to/IPinfo.mmdb \
+  go test ./internal/geo -run TestLiveIPInfoSample -v
+```
+
+## Coverage and limits
+
+| Area | What tests exercise |
+| --- | --- |
+| Geo data | Whole-record fallback, ASN agreement, region codes, timezones, null fields and attribution |
+| HTTP | IPv4/IPv6, request-origin URLs, spoofed proxy headers, readiness and private metrics |
+| Rate limiting | Rolling RPM/RPS, explicit disable switch, zero budget, IPv6 /64 grouping and bounded clients |
+| Updates | Conditional downloads, corrupt-cache repair, atomic publication, locking and failure preservation |
+| Integrity/audits | SHA-256 inventory, reload failures, audit recovery and bounded history |
+| Deployment | Required credentials, credential isolation, environment forwarding and release targets |
+
+Local tests do not validate production TLS, ingress trust, firewall rules,
+provider licensing, alert delivery or distributed-filesystem locking. Validate
+those in staging using the [production checklist](deploy/PRODUCTION.md).
+
+## Benchmarking
+
+```sh
+go run ./cmd/bench -ip 8.8.8.8 -n 10000 -all-sources=false
+go run ./cmd/bench -ip 1.1.1.1 -n 10000 -all-sources=false
+go run ./cmd/bench -ip 2401:4900:1ca2:48ff:5516:e857:6908:1227 -n 10000 -all-sources=false
+go test ./internal/geo -run '^$' -bench '^BenchmarkEnrichMixed' -benchmem -count=5 -cpu=4
+go test ./internal/httpapi -run '^$' -bench '^BenchmarkLimiterParallel' -benchmem -count=3 -cpu=4
+```
+
+Omit `-all-sources=false` to force probes of all three providers; that mode needs
+a MaxMind + DB-IP + IPinfo snapshot. Results are warm, serial, single-IP lookup
+timings, not HTTP throughput or internet latency. Do not benchmark with `-race`.
+
+README lookup measurements used Linux amd64, Ryzen 7 5800XT (16 logical CPUs),
+Go 1.27.3, the locally downloaded MaxMind/DB-IP/IPinfo snapshot, default 1,000
+warm-ups and three runs per IP. Reported p50/p95/p99 are the median of each run's
+percentile. No provider downloads occur during benchmarking. Data coverage and
+machine load affect results; repeat on deployment hardware.
+
+Enrichment-only results used five runs at `-cpu=4`, comparing the previous model
+with precomputed borders/flags and a 512-entry timezone cache. Parallel benchmark
+ns/op measures aggregate operation throughput, not request latency. Limiter
+microbenchmarks include synthetic clocks and rejection paths; do not present
+them as accepted HTTP-request capacity. Capacity/reload claims require a separate
+mixed-IP HTTP load test with successful responses, 429s and memory tracked separately.

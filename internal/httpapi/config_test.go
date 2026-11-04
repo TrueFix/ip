@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net/http/httptest"
 	"net/netip"
 	"testing"
 	"time"
@@ -104,5 +105,47 @@ func TestNoHardcodedOriginSettings(t *testing.T) {
 	t.Setenv("ALLOWED_HOSTS", "https://ip.mynk.org/")
 	if _, err := LoadConfig(); err == nil {
 		t.Fatal("URL accepted as host authority")
+	}
+}
+
+func TestMappedTrustedProxyPrefixNormalization(t *testing.T) {
+	for _, test := range []struct {
+		prefix, normalized, peer string
+	}{
+		{"::ffff:192.0.2.5/120", "192.0.2.0/24", "[::ffff:192.0.2.5]:1234"},
+		{"::ffff:192.0.2.5/128", "192.0.2.5/32", "192.0.2.5:1234"},
+		{"::ffff:0.0.0.0/96", "0.0.0.0/0", "192.0.2.5:1234"},
+		// A broader IPv6 prefix must not be widened into an IPv4 trust rule.
+		{"::ffff:192.0.2.5/95", "::fffe:0:0/95", ""},
+		{"2001:db8::5/64", "2001:db8::/64", "[2001:db8::5]:1234"},
+	} {
+		t.Run(test.prefix, func(t *testing.T) {
+			t.Setenv("TRUSTED_PROXIES", test.prefix)
+			t.Setenv("ALLOWED_HOSTS", "example.com")
+			t.Setenv("PROXY_HEADER", "X-Forwarded-For")
+			c, err := LoadConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(c.TrustedProxies) != 1 || c.TrustedProxies[0].String() != test.normalized {
+				t.Fatalf("unexpected normalized prefixes: %v", c.TrustedProxies)
+			}
+			if test.peer == "" {
+				return
+			}
+			r := httptest.NewRequest("GET", "http://internal/", nil)
+			r.RemoteAddr = test.peer
+			r.Header.Set("X-Forwarded-For", "8.8.8.8")
+			r.Header.Set("X-Forwarded-Host", "example.com")
+			r.Header.Set("X-Forwarded-Proto", "https")
+			ip, err := ClientIP(r, c.TrustedProxies, c.ProxyHeader)
+			if err != nil || ip.String() != "8.8.8.8" {
+				t.Fatalf("forwarded client not trusted: %v %v", ip, err)
+			}
+			origin, err := requestOrigin(r, c)
+			if err != nil || origin != "https://example.com" {
+				t.Fatalf("forwarded origin not trusted: %q %v", origin, err)
+			}
+		})
 	}
 }

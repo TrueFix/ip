@@ -1,6 +1,7 @@
 package geo
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"github.com/TrueFix/myip/internal/inventory"
@@ -240,5 +241,175 @@ func TestEnrich(t *testing.T) {
 		if r.Timezone.IsDST == nil || *r.Timezone.IsDST != (month == time.July) {
 			t.Fatal("DST not calculated dynamically")
 		}
+	}
+}
+
+// inventoriedFixtureStore upgrades the legacy fixture to a checksummed snapshot.
+func inventoriedFixtureStore(t *testing.T) *Store {
+	t.Helper()
+	s := fixtureStore(t)
+	m, _, _ := s.Stats()
+	for _, spec := range inventory.Specs("dbip", false, false) {
+		f, err := inventory.Inspect(filepath.Join(s.dir, m.Version), spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.Files = append(m.Files, f)
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.dir, "current.json"), b, 0644); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if err := s.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestLoadedIntegrityIndependentOfPublication(t *testing.T) {
+	publications := []struct {
+		name, manifest string
+	}{
+		{"missing", ""},
+		{"malformed", "{"},
+		{"invalid-version", `{"provider":"dbip","version":"../invalid"}`},
+		{"wrong-provider", `{"provider":"maxmind","version":"test-version"}`},
+		{"missing-replacement", `{"provider":"dbip","version":"missing-version"}`},
+	}
+	for _, publication := range publications {
+		for _, corrupt := range []bool{false, true} {
+			name := "healthy/"
+			if corrupt {
+				name = "corrupt/"
+			}
+			t.Run(name+publication.name, func(t *testing.T) {
+				s := inventoriedFixtureStore(t)
+				if corrupt {
+					file := filepath.Join(s.dir, s.manifest.Version, "City.mmdb")
+					b, err := os.ReadFile(file)
+					if err != nil {
+						t.Fatal(err)
+					}
+					b[len(b)-1] ^= 1
+					if err := os.WriteFile(file, b, 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				s.integrityAt = time.Now().Add(-7 * time.Hour)
+				manifest := filepath.Join(s.dir, "current.json")
+				if publication.manifest == "" {
+					if err := os.Remove(manifest); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := os.WriteFile(manifest, []byte(publication.manifest), 0644); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.Reload(); err == nil {
+					t.Fatal("unusable publication accepted")
+				}
+				if s.Ready() == corrupt {
+					t.Fatalf("ready=%v, corrupt=%v", s.Ready(), corrupt)
+				}
+				_, err := s.Lookup(netip.MustParseAddr("81.2.69.142"))
+				if corrupt && !errors.Is(err, ErrUnavailable) || !corrupt && err != nil {
+					t.Fatalf("unexpected lookup result: %v", err)
+				}
+				if !corrupt && time.Since(s.integrityAt) > time.Minute {
+					t.Fatal("healthy loaded snapshot was not reverified")
+				}
+			})
+		}
+	}
+}
+
+func TestIntegrityRecoveryReopensAtomicallyRepairedMapping(t *testing.T) {
+	s := inventoriedFixtureStore(t)
+	file := filepath.Join(s.dir, s.manifest.Version, "City.mmdb")
+	original, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := bytes.ReplaceAll(original, []byte("London"), []byte("Xondon"))
+	if bytes.Equal(original, changed) {
+		t.Fatal("fixture must contain London")
+	}
+	if err := os.WriteFile(file, changed, 0644); err != nil {
+		t.Fatal(err)
+	}
+	s.integrityAt = time.Now().Add(-7 * time.Hour)
+	if err := s.Reload(); err == nil || s.Ready() {
+		t.Fatal("corruption was not detected")
+	}
+	if err := os.WriteFile(file+".repair", original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(file+".repair", file); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Go(func() {
+			for range 100 {
+				r, err := s.Lookup(netip.MustParseAddr("81.2.69.142"))
+				if errors.Is(err, ErrUnavailable) {
+					continue
+				}
+				if err != nil || r.City == nil || *r.City != "London" {
+					t.Errorf("lookup exposed old mapping: city=%v error=%v", r.City, err)
+					return
+				}
+			}
+		})
+	}
+	err = s.Reload()
+	wg.Wait()
+	if err != nil || !s.Ready() {
+		t.Fatalf("repaired snapshot did not recover: %v", err)
+	}
+	r, err := s.Lookup(netip.MustParseAddr("81.2.69.142"))
+	if err != nil || r.City == nil || *r.City != "London" {
+		t.Fatalf("recovery kept corrupted mapping: city=%v error=%v", r.City, err)
+	}
+}
+
+func TestValidReplacementRecoversFailedLoadedIntegrity(t *testing.T) {
+	s := inventoriedFixtureStore(t)
+	m, _, _ := s.Stats()
+	oldPath := filepath.Join(s.dir, m.Version)
+	m.Version = "valid-replacement"
+	newPath := filepath.Join(s.dir, m.Version)
+	if err := os.Mkdir(newPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range m.Files {
+		b, err := os.ReadFile(filepath.Join(oldPath, file.Path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(newPath, file.Path), b, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Remove(filepath.Join(oldPath, "City.mmdb")); err != nil {
+		t.Fatal(err)
+	}
+	s.integrityAt = time.Now().Add(-7 * time.Hour)
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.dir, "current.json"), b, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Reload(); err != nil || !s.Ready() {
+		t.Fatalf("valid replacement failed to restore service: %v", err)
+	}
+	loaded, _, _ := s.Stats()
+	if loaded.Version != m.Version {
+		t.Fatal("replacement not loaded")
 	}
 }

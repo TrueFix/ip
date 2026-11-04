@@ -96,36 +96,65 @@ func OpenPair(dir, provider string) (*maxminddb.Reader, *maxminddb.Reader, error
 func (s *Store) Reload() error {
 	s.reloadMu.Lock()
 	defer s.reloadMu.Unlock()
+	// The loaded snapshot must remain trustworthy even if publication is missing,
+	// malformed, or points at an unusable replacement.
+	integrityErr := s.verifyLoaded()
 	b, err := os.ReadFile(filepath.Join(s.dir, "current.json"))
 	if err != nil {
-		return err
+		return errors.Join(integrityErr, err)
 	}
 	var m Manifest
 	if err := json.Unmarshal(b, &m); err != nil {
-		return err
+		return errors.Join(integrityErr, err)
 	}
 	if m.Provider != s.provider || !ValidVersion(m.Version) {
-		return errors.New("invalid database manifest")
+		return errors.Join(integrityErr, errors.New("invalid database manifest"))
 	}
 	s.mu.RLock()
 	same := s.city != nil && s.manifest.Version == m.Version
-	loaded := s.manifest
-	lastVerified := s.integrityAt
-	failed := s.integrityFailed
 	s.mu.RUnlock()
 	if same {
-		if len(loaded.Files) > 0 && (failed || time.Since(lastVerified) >= 6*time.Hour) {
-			err := inventory.Verify(filepath.Join(s.dir, loaded.Version), loaded.Files, inventory.Specs(loaded.Provider, loaded.Hybrid, loaded.IPInfo))
-			s.mu.Lock()
-			s.integrityFailed = err != nil
-			if err == nil {
-				s.integrityAt = time.Now().UTC()
-			}
-			s.mu.Unlock()
-			return err
-		}
+		return integrityErr
+	}
+	if err := s.loadSnapshot(m); err != nil {
+		return errors.Join(integrityErr, err)
+	}
+	// A valid replacement also recovers an unhealthy previous snapshot.
+	return nil
+}
+
+// verifyLoaded runs under reloadMu, with hashing and reader validation outside
+// the lookup lock. Failed mappings are replaced, never merely marked healthy.
+func (s *Store) verifyLoaded() error {
+	s.mu.RLock()
+	loaded := s.manifest
+	present := s.city != nil
+	lastVerified, failed := s.integrityAt, s.integrityFailed
+	s.mu.RUnlock()
+	if !present || len(loaded.Files) == 0 || (!failed && time.Since(lastVerified) < 6*time.Hour) {
 		return nil
 	}
+	if failed {
+		// Atomic file repair may replace inodes while the old mmap still exposes
+		// corrupt bytes. Reopen and validate before restoring readiness.
+		return s.loadSnapshot(loaded)
+	}
+	if err := inventory.Verify(filepath.Join(s.dir, loaded.Version), loaded.Files, inventory.Specs(loaded.Provider, loaded.Hybrid, loaded.IPInfo)); err != nil {
+		s.mu.Lock()
+		s.integrityFailed = true
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Lock()
+	s.integrityAt = time.Now().UTC()
+	s.mu.Unlock()
+	return nil
+}
+
+// loadSnapshot validates outside mu, then swaps and retires readers while
+// holding its write lock so concurrent lookups cannot use closed mappings.
+// The caller holds reloadMu.
+func (s *Store) loadSnapshot(m Manifest) error {
 	if len(m.Files) > 0 {
 		if err := inventory.Verify(filepath.Join(s.dir, m.Version), m.Files, inventory.Specs(m.Provider, m.Hybrid, m.IPInfo)); err != nil {
 			return err
