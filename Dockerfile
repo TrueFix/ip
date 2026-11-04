@@ -17,7 +17,7 @@ FROM build AS updater-build
 RUN go mod download github.com/maxmind/geoipupdate/v8@v8.0.0 \
     && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -C "$(go env GOMODCACHE)/github.com/maxmind/geoipupdate/v8@v8.0.0" -trimpath -o /out/geoipupdate ./cmd/geoipupdate
 
-FROM alpine:3.23 AS base
+FROM alpine:3.24 AS base
 ENV DATA_DIR=/data
 ENV METRICS_ADDR=:9090
 ARG VERSION=dev
