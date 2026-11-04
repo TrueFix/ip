@@ -95,7 +95,9 @@ make audit
 For local runs, benchmarks, SQLite history and the full response schema, see the [reference](docs/REFERENCE.md).
 
 Prefer binaries? [GitHub Releases](https://github.com/TrueFix/ip/releases) include
-static Linux archives for amd64, arm64, ARMv7, 386 and RISC-V, with SHA-256 checksums.
+one standalone API binary per Linux architecture—amd64, arm64, ARMv7, 386 and
+RISC-V—with SHA-256 checksums. No archives or helper executables. The raw binary
+needs provisioned databases; Docker remains the easiest option for automatic updates.
 
 ---
 

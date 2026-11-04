@@ -70,7 +70,9 @@ Verified on 2026-11-04:
   its absence even when source databases contain a postal code.
 - There is one workflow, `publish.yml`, with Docker Hub publishing and GitHub
   Release jobs. Its syntax passes actionlint. Local release builds succeeded for
-  Linux amd64/arm64/ARMv7/386/RISC-V 64; archive checksums passed. These are
+  Linux amd64/arm64/ARMv7/386/RISC-V 64; raw-binary checksums passed. Releases
+  now contain exactly one API executable per architecture plus a checksum file,
+  with no tar/zip archives or helper binaries. Native `--version` execution passed. These are
   cross-compilation checks, not runtime coverage of every distribution/CPU.
 
 Warm baseline for `122.168.197.166` on this development machine, 10,000 measured

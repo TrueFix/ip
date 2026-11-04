@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.2 — 2026-11-04
+
+- Publish standalone API binaries instead of release archives and bundled helpers.
+
 ## v0.1.1 — 2026-11-04
 
 - Update the MaxMind database reader to v1.13.1 and flock to v0.13.1.

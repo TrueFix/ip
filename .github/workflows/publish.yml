@@ -67,7 +67,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build static Linux release archives
+      - name: Build standalone Linux API binaries
         run: BUILD_DATE="$(git show -s --format=%cI "$GITHUB_SHA")" sh scripts/release.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"
       - name: Create release and upload artifacts
         env:
@@ -80,4 +80,8 @@ jobs:
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" "${args[@]}"
           fi
-          gh release upload "$GITHUB_REF_NAME" dist/myip-"$GITHUB_REF_NAME"-linux-*.tar.gz "dist/SHA256SUMS-$GITHUB_REF_NAME.txt" --clobber
+          assets=("dist/SHA256SUMS-$GITHUB_REF_NAME.txt")
+          for arch in amd64 arm64 armv7 386 riscv64; do
+            assets+=("dist/myip-$GITHUB_REF_NAME-linux-$arch")
+          done
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
