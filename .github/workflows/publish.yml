@@ -54,7 +54,7 @@ jobs:
           sbom: true
 
   github-release:
-    name: Linux binaries and GitHub Release
+    name: Linux, macOS and Windows binaries
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -67,7 +67,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Build standalone Linux API binaries
+      - name: Build standalone cross-platform API binaries
         run: BUILD_DATE="$(git show -s --format=%cI "$GITHUB_SHA")" sh scripts/release.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"
       - name: Create release and upload artifacts
         env:
@@ -81,7 +81,8 @@ jobs:
             gh release create "$GITHUB_REF_NAME" "${args[@]}"
           fi
           assets=("dist/SHA256SUMS-$GITHUB_REF_NAME.txt")
-          for arch in amd64 arm64 armv7 386 riscv64; do
-            assets+=("dist/myip-$GITHUB_REF_NAME-linux-$arch")
-          done
+          while read -r _ filename; do
+            [[ "$filename" != */* && "$filename" == myip-"$GITHUB_REF_NAME"-* ]]
+            assets+=("dist/$filename")
+          done < "dist/SHA256SUMS-$GITHUB_REF_NAME.txt"
           gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber

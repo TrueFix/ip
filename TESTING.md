@@ -70,10 +70,12 @@ Verified on 2026-11-04:
   its absence even when source databases contain a postal code.
 - There is one workflow, `publish.yml`, with Docker Hub publishing and GitHub
   Release jobs. Its syntax passes actionlint. Local release builds succeeded for
-  Linux amd64/arm64/ARMv7/386/RISC-V 64; raw-binary checksums passed. Releases
-  now contain exactly one API executable per architecture plus a checksum file,
-  with no tar/zip archives or helper binaries. Native `--version` execution passed. These are
-  cross-compilation checks, not runtime coverage of every distribution/CPU.
+  20 OS/CPU targets: 15 Linux variants, two macOS targets and three Windows targets.
+  All raw-binary checksums passed. ELF/Mach-O/PE headers matched their advertised
+  architectures; Linux files had no dynamic interpreter. Releases contain one
+  API executable per target plus a checksum file, with no archives/helpers.
+  Native Linux amd64 `--version` execution passed. These are cross-compilation
+  checks, not native macOS/Windows tests or coverage of every distribution/CPU.
 
 Warm baseline for `122.168.197.166` on this development machine, 10,000 measured
 iterations after 1,000 warm-ups, **MaxMind + DB-IP only**, normal lookup path:

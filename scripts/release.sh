@@ -15,15 +15,17 @@ mkdir -p dist
 scratch=$(mktemp -d "dist/.release-$version.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 
-for target in amd64 arm64 armv7 386 riscv64; do
-    arch=$target
-    case "$target" in armv7) arch=arm; export GOARM=7 ;; *) unset GOARM ;; esac
-    name="myip-$version-linux-$target"
-    CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags="$flags" -o "$scratch/$name" ./cmd/myip
+while read -r os arch target arm; do
+    case "$os" in ''|'#'*) continue ;; esac
+    case "$arm" in -) unset GOARM ;; *) export GOARM="$arm" ;; esac
+    suffix=''
+    case "$os" in windows) suffix='.exe' ;; esac
+    name="myip-$version-$os-$target$suffix"
+    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags="$flags" -o "$scratch/$name" ./cmd/myip
     (cd "$scratch" && sha256sum "$name") >> "$scratch/SHA256SUMS-$version.txt"
-done
-for target in amd64 arm64 armv7 386 riscv64; do
-    mv "$scratch/myip-$version-linux-$target" "dist/myip-$version-linux-$target"
-done
+done < scripts/release-targets.txt
+while read -r _ name; do
+    mv "$scratch/$name" "dist/$name"
+done < "$scratch/SHA256SUMS-$version.txt"
 mv "$scratch/SHA256SUMS-$version.txt" "dist/SHA256SUMS-$version.txt"
-echo "Standalone Linux API binaries and checksums are in dist/ (version $version)."
+echo "Standalone Linux, macOS and Windows API binaries and checksums are in dist/ (version $version)."

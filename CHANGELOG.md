@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.3 — 2026-11-04
+
+- Expand raw API releases to 20 OS/CPU targets across Linux, macOS and Windows.
+- Generate release uploads from the checksum manifest so every built target is included.
+
 ## v0.1.2 — 2026-11-04
 
 - Publish standalone API binaries instead of release archives and bundled helpers.

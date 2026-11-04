@@ -94,10 +94,18 @@ make audit
 
 For local runs, benchmarks, SQLite history and the full response schema, see the [reference](docs/REFERENCE.md).
 
-Prefer binaries? [GitHub Releases](https://github.com/TrueFix/ip/releases) include
-one standalone API binary per Linux architecture—amd64, arm64, ARMv7, 386 and
-RISC-V—with SHA-256 checksums. No archives or helper executables. The raw binary
-needs provisioned databases; Docker remains the easiest option for automatic updates.
+Prefer binaries? [GitHub Releases](https://github.com/TrueFix/ip/releases) provide
+raw API executables and SHA-256 checksums—no archives or helper executables.
+
+| OS | Targets |
+| --- | --- |
+| Linux | 15 variants, including x86, ARM, MIPS, PowerPC, RISC-V, LoongArch and s390x |
+| macOS | Intel and Apple Silicon |
+| Windows | x86, x64 and ARM64 (`.exe`) |
+
+Static Linux builds work across compatible distros without glibc/musl-specific
+packages. See the [full target list](scripts/release-targets.txt). Raw binaries
+need provisioned databases; Docker remains easiest for automatic updates.
 
 ---
 

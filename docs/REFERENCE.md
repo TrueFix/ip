@@ -39,6 +39,13 @@ healthcheck. Docker Hub images support Linux amd64 and arm64. Set optional
 `IMAGE_TAG=v0.1.0` to pin both containers to a published release. The README has
 download commands for the two small configuration files needed on a fresh host.
 
+For running without Docker, GitHub Releases contain raw API executables for Linux,
+macOS and Windows. The [release target list](../scripts/release-targets.txt) is
+authoritative; Windows downloads use `.exe`. No archives/helpers are bundled.
+Linux builds are static and not tied to a distribution's libc. Choose a binary
+for your CPU and a supported OS/kernel; provision the local MMDB snapshot before
+starting it. See the [deployment guide](../deploy/PRODUCTION.md) for limitations.
+
 ```sh
 cp .env.example .env
 mkdir -p secrets

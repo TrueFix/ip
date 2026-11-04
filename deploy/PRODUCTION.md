@@ -61,23 +61,39 @@ Version, Git revision, build date and Go version are visible in `/docs`;
 builds report `dev`/`unknown` until stamped. `make build` derives revision and
 version from Git when available and stamps a UTC build date.
 
-`make release VERSION=v0.1.0` produces one static **API binary per architecture**
-for Linux amd64, arm64, ARMv7, 386 and RISC-V 64, plus SHA-256 checksums in ignored
-`dist/`. Assets are named `myip-v0.1.0-linux-amd64`, etc.—no tar/zip archives,
-updater/benchmark binaries or downloader executables are attached. Download the
-correct binary, verify its checksum, and `chmod +x` it. No Go compiler or distro
-package manager is required. It needs a provisioned database snapshot; run the
-Docker updater or build the source updater separately for database provisioning
-and scheduled refreshes. The Docker image is unchanged and includes all roles.
-These binaries target current Linux kernels, not every historical distro or
-macOS/Windows.
+`make release VERSION=v0.1.0` produces one **API binary per OS/CPU target**, plus
+SHA-256 checksums in ignored `dist/`. The checked-in target list is
+`scripts/release-targets.txt`; both building and uploading use that manifest's
+outputs so new targets cannot be silently omitted from release uploads.
+
+| OS | Architectures |
+| --- | --- |
+| Linux | 386, amd64, ARMv5/v6/v7, arm64, loong64, mips, mipsle, mips64, mips64le, ppc64, ppc64le, riscv64, s390x |
+| macOS (`darwin`) | amd64 (Intel), arm64 (Apple Silicon) |
+| Windows | 386 (x86), amd64 (x64), arm64 |
+
+Assets are named `myip-v0.1.0-linux-amd64`, `myip-v0.1.0-darwin-arm64`,
+`myip-v0.1.0-windows-amd64.exe`, etc. No tar/zip archives or helper executables
+are attached. All are built with CGO disabled. Linux binaries are static, so
+separate Ubuntu/Debian/Fedora/Alpine/Arch executables are unnecessary; they still
+require compatible CPU hardware and Go 1.27's supported OS/kernel versions.
+Cross-compilation is not runtime testing on every distro. macOS/Windows binaries
+use their normal OS system facilities and are not claimed to be fully static.
+The binaries are not Developer ID-notarized or Authenticode-signed; those OSes
+may display security prompts. Verify checksums and the download source.
+
+Download the correct binary, verify its checksum, and `chmod +x` it on Unix.
+No Go compiler or distro package manager is required to run it. It needs a
+provisioned database snapshot; run the Docker updater or build the source updater
+separately for provisioning and scheduled refreshes. Docker continues to publish
+Linux amd64/arm64 images with all roles, independently of this raw-binary matrix.
 
 The only workflow is `.github/workflows/publish.yml`. On each version-tag push:
 
 1. Build one combined image for Linux amd64/arm64 and push
    `mayankfawkes/ip:<tag>` to Docker Hub. Stable tags also update `latest`;
    prerelease tags never replace it. Provenance/SBOM attestations are enabled.
-2. Build the raw Linux API binaries/checksums and create a **GitHub Release**, attaching
+2. Build the raw Linux/macOS/Windows API binaries/checksums and create a **GitHub Release**, attaching
    the files. Prerelease tags produce prereleases; reruns can replace the same
    tag's assets.
 
