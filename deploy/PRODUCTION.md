@@ -120,7 +120,7 @@ sanitized headers; see `deploy/nginx.conf` and the README proxy section.
 
 Download `compose.yml` and `.env.example` as shown in README.md; the server needs
 only these configuration files, not a source checkout. Pin a published version
-in `.env` with `IMAGE_TAG=v0.1.0`, then:
+by setting both `image:` entries to `mayankfawkes/ip:v0.1.3`, then:
 
 ```sh
 docker compose config --quiet
@@ -136,7 +136,8 @@ not runtime settings. Pin a release/image digest in your deployment inventory.
 
 For source development only, build locally with
 `docker build --target production -t mayankfawkes/ip:dev .`, then run
-`IMAGE_TAG=dev docker compose up -d --pull never`. This is not needed on servers.
+set both Compose `image:` entries to `mayankfawkes/ip:dev` and run
+`docker compose up -d --pull never`. This is not needed on servers.
 
 The API runs non-root, with a read-only filesystem/data mount, dropped
 capabilities and bounded resources. Only the updater writes the persistent

@@ -38,8 +38,11 @@ No credentials or `.env` needed for this DB-IP template. For MaxMind, use the
 [easy deployment guide](DEPLOYMENT.md)—its template requires both credentials
 before Compose will start.
 
+Source-specific `.env` examples and every setting explained:
+[Environment variables](docs/ENVIRONMENT.md).
+
 Both containers use **[mayankfawkes/ip](https://hub.docker.com/r/mayankfawkes/ip)**
-(amd64/arm64). Pin a release with `IMAGE_TAG=v0.1.0`; otherwise `latest` selects
+(amd64/arm64). Pin a release by editing both Compose image tags; otherwise `latest` selects
 the latest stable release. Images become available after the first version-tag push.
 
 ### Choose your data

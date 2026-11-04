@@ -26,6 +26,21 @@ func TestRollingMinuteBudget(t *testing.T) {
 	}
 }
 
+func TestZeroRPMDisablesAllLimits(t *testing.T) {
+	l := NewLimiter(0, 1, 1, 1)
+	now := time.Now()
+	for _, address := range []string{"8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"} {
+		for range 1000 {
+			if allowed, retry := l.AllowWithRetry(netip.MustParseAddr(address), now); !allowed || retry != 0 {
+				t.Fatalf("disabled limiter denied a request: %v %s", allowed, retry)
+			}
+		}
+	}
+	if stats := l.Stats(); stats != (LimitStats{}) {
+		t.Fatalf("disabled limiter tracked clients or denials: %+v", stats)
+	}
+}
+
 func TestRollingRingGrowthAndWrap(t *testing.T) {
 	l := NewLimiter(35, 0, 1, 10)
 	ip := netip.MustParseAddr("8.8.8.8")

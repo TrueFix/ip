@@ -36,7 +36,7 @@ The standard `compose.yml` pulls **`mayankfawkes/ip`** from Docker Hub; there is
 no local image build or source checkout requirement. API and updater share the
 same image/tag; the updater overrides its entrypoint and disables the API-only
 healthcheck. Docker Hub images support Linux amd64 and arm64. Set optional
-`IMAGE_TAG=v0.1.0` to pin both containers to a published release. The README has
+both Compose `image:` entries to a release tag to pin the containers. The README has
 download commands for the two small configuration files needed on a fresh host.
 
 For running without Docker, GitHub Releases contain raw API executables for Linux,
@@ -307,7 +307,7 @@ Use the actual peer IP seen by the API, not an arbitrary private network. Never
 trust `0.0.0.0/0` or `::/0`. Supported headers are `X-Forwarded-For`, `X-Real-IP`,
 and `CF-Connecting-IP`. Choose **one**; the application does not guess between them.
 
-- **Direct:** leave `TRUSTED_PROXIES` empty. Set `BIND_ADDRESS=0.0.0.0` only if
+- **Direct:** leave `TRUSTED_PROXIES` empty. Bind the Compose host port to `0.0.0.0` only if
   intentional; terminate HTTPS with your chosen ingress/load balancer. The app
   itself serves HTTP, not TLS.
 - **Nginx → app:** overwrite inbound forwarding headers; see `deploy/nginx.conf`.
@@ -358,35 +358,30 @@ the ingress: in-process limiting is not a substitute for edge protection.
 
 ## Configuration
 
-| Variable | Default |
-| --- | --- |
-| `GEOIP_PROVIDER` | `maxmind` (hybrid) or `dbip` (DB-IP only) |
-| `DATA_DIR` | `./data` locally; Docker images default to `/data` |
-| `LISTEN_ADDR` | `:8080` |
-| `METRICS_ADDR` | `127.0.0.1:9090` locally; `:9090` inside Docker |
-| `TRUSTED_PROXIES` | Empty, comma-separated CIDRs |
-| `PROXY_HEADER` | `X-Forwarded-For` |
-| `ALLOWED_HOSTS` | Empty; optional comma-separated host[:port] allowlist |
-| `RATE_LIMIT_RPM` | `300` per client, strict rolling 60-second budget |
-| `RATE_LIMIT_RPS` | Unset; optional additional token-bucket throttle |
-| `RATE_LIMIT_BURST` | `20`; used only when RPS is configured |
-| `RATE_LIMIT_MAX_CLIENTS` | `50000` |
-| `CORS_ORIGIN` | `*` (no credentials) |
-| `UPDATE_INTERVAL` | `24h`, minimum `1h` |
-| `MAXMIND_ACCOUNT_ID` / `_FILE` | Required in MaxMind updater mode |
-| `MAXMIND_LICENSE_KEY` / `_FILE` | Required in MaxMind updater mode |
-| `IPINFO_ENABLED` | `false`; optional third database in MaxMind updater mode |
-| `IPINFO_TOKEN` / `_FILE` | Required only when IPinfo is enabled (updater only) |
-| `ISP_FROM_ASN` | `false`; explicitly use IPinfo operator name as ISP approximation |
-| `GEOIPUPDATE_CONFIG_FILE` | Unset; optional legacy alternative (updater only) |
+Settings are documented in separate tables by source and purpose in
+[Environment variables](ENVIRONMENT.md), including requirements, defaults and
+which Compose templates forward them. Most are optional, not a setup checklist.
+
+| Group | Authentication | Settings and examples |
+| --- | --- | --- |
+| DB-IP | None | [DB-IP table](ENVIRONMENT.md#1-db-ip--no-authentication) |
+| MaxMind + DB-IP fallback | MaxMind account ID + license key | [MaxMind table](ENVIRONMENT.md#2-maxmind--authentication-required) |
+| Optional IPinfo Lite | IPinfo token, plus existing MaxMind credentials | [IPinfo table and ISP switch examples](ENVIRONMENT.md#3-ipinfo-lite--token-required) |
+| Shared database settings | No additional authentication | [Update interval and storage](ENVIRONMENT.md#4-shared-database-settings--no-authentication) |
+| Rate limiting | None | [Limits and how to disable them](ENVIRONMENT.md#5-rate-limiting--no-authentication) |
+| Proxy, hostname and browser settings | These do not add authentication | [Security settings](ENVIRONMENT.md#6-proxy-hostname-and-browser-settings--no-authentication) |
+| Process listeners | No built-in authentication; monitoring must stay private | [Listener settings](ENVIRONMENT.md#7-process-listeners--no-authentication) |
 
 Both programs default to the same `./data` directory relative to their working
 directory. No `DATA_DIR` is necessary when running them from the project root.
 Docker images set `/data` as their default. Compose uses a persistent named
-volume there; optionally set the
-Compose-only `DATA_VOLUME=/absolute/host/path` for a bind mount. The non-root
-updater must have write permission to that host directory. The Compose-only
-`BIND_ADDRESS` and `PORT` control the published API port, not the process listener.
+volume there. Edit Compose volume mounts directly if you need a host bind mount;
+the non-root updater must have write permission. Edit Compose `ports:` directly
+to change the host bind address/port, not the process listener.
+
+Set `RATE_LIMIT_RPM=0` to bypass RPM, RPS and client-capacity limits entirely,
+without tracking client buckets. Other rate-limit values still must be valid,
+but have no limiting effect while RPM is zero.
 
 RPM and RPS are cumulative restrictions when both are set. For example,
 `RATE_LIMIT_RPM=60`, `RATE_LIMIT_RPS=2`, `RATE_LIMIT_BURST=5` allows at most 60

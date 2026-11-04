@@ -18,7 +18,12 @@ func TestRPMDefaultsAndOptionalRPS(t *testing.T) {
 	if err != nil || c.RPM != 60 || c.Rate != 2 {
 		t.Fatalf("combined limits not loaded: %v", err)
 	}
-	for _, value := range []string{"0", "-1", "NaN", "100001"} {
+	t.Setenv("RATE_LIMIT_RPM", "0")
+	c, err = LoadConfig()
+	if err != nil || c.RPM != 0 {
+		t.Fatalf("disabled rate limiting not accepted: %v", err)
+	}
+	for _, value := range []string{"-1", "NaN", "100001"} {
 		t.Setenv("RATE_LIMIT_RPM", value)
 		if _, err := LoadConfig(); err == nil {
 			t.Fatalf("invalid RPM %s accepted", value)

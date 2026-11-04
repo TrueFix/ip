@@ -109,7 +109,8 @@ on a Docker-capable host before launch:
 ```sh
 docker build --target production -t mayankfawkes/ip:dev .
 SMOKE_IMAGE=mayankfawkes/ip:dev python3 scripts/smoke-container.py
-IMAGE_TAG=dev docker compose up -d --pull never
+# Set both image: entries in your local Compose file to mayankfawkes/ip:dev.
+docker compose up -d --pull never
 docker compose logs updater
 curl http://127.0.0.1:8080/healthz
 curl http://127.0.0.1:8080/8.8.8.8

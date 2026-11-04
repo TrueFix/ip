@@ -1,10 +1,10 @@
 services:
   api:
-    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    image: mayankfawkes/ip:latest
     restart: unless-stopped
     stop_grace_period: 30s
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       GEOIP_PROVIDER: ${GEOIP_PROVIDER:-maxmind}
       DATA_DIR: /data
@@ -18,7 +18,7 @@ services:
       RATE_LIMIT_MAX_CLIENTS: ${RATE_LIMIT_MAX_CLIENTS:-50000}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
     volumes:
-      - ${DATA_VOLUME:-databases}:/data:ro
+      - databases:/data:ro
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -30,7 +30,7 @@ services:
       options: {max-size: "10m", max-file: "3"}
 
   updater:
-    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    image: mayankfawkes/ip:latest
     entrypoint: ["/usr/local/bin/updater"]
     healthcheck:
       disable: true
@@ -49,7 +49,7 @@ services:
       IPINFO_TOKEN: ${IPINFO_TOKEN:-}
       IPINFO_TOKEN_FILE: ${IPINFO_TOKEN_FILE:-}
     volumes:
-      - ${DATA_VOLUME:-databases}:/data
+      - databases:/data
       - ./secrets:/run/secrets:ro
     read_only: true
     tmpfs: [/tmp:size=16m,mode=1777]

@@ -1,9 +1,9 @@
 services:
   api:
-    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    image: mayankfawkes/ip:latest
     restart: unless-stopped
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       GEOIP_PROVIDER: dbip
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
@@ -15,7 +15,7 @@ services:
     read_only: true
 
   updater:
-    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    image: mayankfawkes/ip:latest
     entrypoint: ["/usr/local/bin/updater"]
     restart: unless-stopped
     healthcheck:

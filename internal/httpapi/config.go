@@ -45,8 +45,8 @@ func LoadConfig() (Config, error) {
 		return c, fmt.Errorf("unsupported PROXY_HEADER")
 	}
 	c.RPM, err = strconv.Atoi(Env("RATE_LIMIT_RPM", "300"))
-	if err != nil || c.RPM < 1 || c.RPM > 100000 {
-		return c, fmt.Errorf("RATE_LIMIT_RPM must be in [1,100000]")
+	if err != nil || c.RPM < 0 || c.RPM > 100000 {
+		return c, fmt.Errorf("RATE_LIMIT_RPM must be in [0,100000] (0 disables all rate limiting)")
 	}
 	if raw := os.Getenv("RATE_LIMIT_RPS"); raw != "" {
 		c.Rate, err = strconv.ParseFloat(raw, 64)

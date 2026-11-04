@@ -34,6 +34,10 @@ func (l *Limiter) Allow(ip netip.Addr, now time.Time) bool {
 // RPM is a strict rolling-minute budget. Optional RPS is an additional token
 // bucket with configurable burst, not a replacement for the minute budget.
 func (l *Limiter) AllowWithRetry(ip netip.Addr, now time.Time) (bool, time.Duration) {
+	// Zero disables every limiter, including RPS and client capacity tracking.
+	if l.rpm == 0 {
+		return true, 0
+	}
 	if ip.Is6() {
 		ip = netip.PrefixFrom(ip, 64).Masked().Addr()
 	}

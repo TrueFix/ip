@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Present configuration in source-specific tables with explicit authentication requirements and local ISP examples.
+
+- Remove Docker-only environment overrides; configure image tags, ports and mounts directly in Compose.
+- Support `RATE_LIMIT_RPM=0` to disable all built-in throttling and client tracking.
+
+- Separate source-specific environment examples and document every runtime/Compose setting.
+- Reduce the root environment example to credential-free DB-IP with optional overrides commented out.
+
 - Add a short deployment guide and standalone DB-IP/MaxMind Compose templates.
 - Require both MaxMind credentials at Compose validation time for the hybrid template.
 - Remove the redundant minimal Compose file.
