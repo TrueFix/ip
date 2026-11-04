@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1 — 2026-11-04
+
+- Update the MaxMind database reader to v1.13.1 and flock to v0.13.1.
+- Update the runtime image to Alpine 3.24.
+- Upgrade the pinned checkout, QEMU, Buildx, Docker login and build/push Actions.
+- Keep `latest` as the default Compose image tag for both services.
+
 ## v0.1.0 — 2026-11-04
 
 Initial release.
