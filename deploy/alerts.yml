@@ -1,0 +1,45 @@
+groups:
+  - name: myip
+    rules:
+      - alert: MyIPUnavailable
+        expr: up{job="myip"} == 0 or myip_ready == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "myip is unavailable or has no loaded databases"
+      - alert: MyIPUpdaterStale
+        expr: time() - myip_database_update_last_success_timestamp_seconds > 172800
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "myip database updater has not succeeded for over 48 hours"
+      - alert: MyIPDatabaseStale
+        expr: time() - myip_database_build_timestamp_seconds > 3888000
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "myip database build is over 45 days old"
+      - alert: MyIPFallbackUnavailableOrStale
+        expr: myip_fallback_database_build_timestamp_seconds == 0 or (time() - myip_fallback_database_build_timestamp_seconds > 3888000)
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "myip hybrid fallback is missing or over 45 days old"
+      - alert: MyIPIntegrityUnverified
+        expr: myip_database_integrity_ok == 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Loaded myip snapshot has no verified inventory or failed integrity validation"
+      - alert: MyIPSourceNotChecked
+        expr: (time() - myip_database_checked_timestamp_seconds > 172800) and (myip_database_checked_timestamp_seconds > 0)
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "A myip source file has not passed an update check in over 48 hours"
+      - alert: MyIPSnapshotNotLoaded
+        expr: myip_database_snapshot_matches_published == 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "myip has not loaded the updater's published snapshot"

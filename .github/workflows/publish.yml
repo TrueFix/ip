@@ -1,0 +1,83 @@
+name: Publish release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  dockerhub:
+    name: Docker Hub image
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Derive metadata from tag
+        id: metadata
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          printf 'version=%s\ndate=%s\n' "$GITHUB_REF_NAME" "$(git show -s --format=%cI "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+          {
+            echo 'tags<<TAGS'
+            echo "mayankfawkes/ip:$GITHUB_REF_NAME"
+            if [[ "$GITHUB_REF_NAME" != *-* ]]; then echo 'mayankfawkes/ip:latest'; fi
+            echo 'TAGS'
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.metadata.outputs.version }}
+            REVISION=${{ github.sha }}
+            BUILD_DATE=${{ steps.metadata.outputs.date }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+  github-release:
+    name: Linux binaries and GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build static Linux release archives
+        run: BUILD_DATE="$(git show -s --format=%cI "$GITHUB_SHA")" sh scripts/release.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"
+      - name: Create release and upload artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          args=(--verify-tag --title "$GITHUB_REF_NAME" --generate-notes)
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then args+=(--prerelease); fi
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" "${args[@]}"
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/myip-"$GITHUB_REF_NAME"-linux-*.tar.gz "dist/SHA256SUMS-$GITHUB_REF_NAME.txt" --clobber

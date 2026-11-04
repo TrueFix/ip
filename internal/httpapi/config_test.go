@@ -1,0 +1,55 @@
+package httpapi
+
+import "testing"
+
+func TestRPMDefaultsAndOptionalRPS(t *testing.T) {
+	t.Setenv("RATE_LIMIT_RPM", "")
+	t.Setenv("RATE_LIMIT_RPS", "")
+	c, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.RPM != 300 || c.Rate != 0 {
+		t.Fatal("unexpected default rate limits")
+	}
+	t.Setenv("RATE_LIMIT_RPM", "60")
+	t.Setenv("RATE_LIMIT_RPS", "2")
+	c, err = LoadConfig()
+	if err != nil || c.RPM != 60 || c.Rate != 2 {
+		t.Fatalf("combined limits not loaded: %v", err)
+	}
+	for _, value := range []string{"0", "-1", "NaN", "100001"} {
+		t.Setenv("RATE_LIMIT_RPM", value)
+		if _, err := LoadConfig(); err == nil {
+			t.Fatalf("invalid RPM %s accepted", value)
+		}
+	}
+}
+
+func TestMetricsDefaultsToLoopback(t *testing.T) {
+	t.Setenv("METRICS_ADDR", "")
+	c, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.MetricsListen != "127.0.0.1:9090" {
+		t.Fatal("local metrics exposed by default")
+	}
+}
+
+func TestNoHardcodedOriginSettings(t *testing.T) {
+	t.Setenv("BASE_URL", "not-a-url")
+	t.Setenv("DOCS_URL", "not-a-url")
+	if _, err := LoadConfig(); err != nil {
+		t.Fatal("removed URL environment variables still affect configuration", err)
+	}
+	t.Setenv("ALLOWED_HOSTS", "ip.mynk.org,localhost:8080")
+	c, err := LoadConfig()
+	if err != nil || len(c.AllowedHosts) != 2 {
+		t.Fatalf("allowlist not loaded: %v", err)
+	}
+	t.Setenv("ALLOWED_HOSTS", "https://ip.mynk.org/")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("URL accepted as host authority")
+	}
+}

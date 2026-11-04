@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 30s
+scrape_configs:
+  - job_name: myip
+    static_configs:
+      - targets: ["api:9090"]
+# Attach Prometheus to the Compose service network. Do not publish API port 9090.

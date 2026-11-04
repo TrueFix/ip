@@ -1,0 +1,23 @@
+[
+  {
+    "repository": "mledoze/countries",
+    "commit": "fa4f62182d19ff4f8b325cde6387c9cd9d80955a"
+  },
+  {
+    "repository": "lipis/flag-icons",
+    "commit": "ac7e0eb3259eb62aa6100c435607e2fe03896a97"
+  },
+  {
+    "repository": "eggert/tz",
+    "commit": "e28a7a4a1a5f497baae27ee63603efa88537607a",
+    "file": "zone.tab",
+    "license": "public domain"
+  },
+  {
+    "repository": "wooorm/iso-3166",
+    "commit": "13e7feb32753216511747ff1d96f0d51c560050d",
+    "file": "2.js",
+    "license": "MIT",
+    "transform": "scripts/update-subdivisions.py"
+  }
+]

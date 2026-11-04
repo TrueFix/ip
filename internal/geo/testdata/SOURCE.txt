@@ -1,0 +1,3 @@
+MaxMind test databases
+https://github.com/maxmind/MaxMind-DB/tree/55f9b2727fd5ab22ce175b475afbcd44c64dd009/test-data
+Apache 2.0; see LICENSE-APACHE

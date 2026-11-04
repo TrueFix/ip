@@ -1,0 +1,5 @@
+# Copy to secrets/GeoIP.conf. The updater (UID 65532) must be able to read it.
+# Use a NEW key; revoke any key previously shared in chat.
+AccountID REPLACE_WITH_ACCOUNT_ID
+LicenseKey REPLACE_WITH_NEW_LICENSE_KEY
+EditionIDs GeoLite2-City GeoLite2-ASN

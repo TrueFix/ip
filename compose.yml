@@ -1,0 +1,68 @@
+services:
+  api:
+    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+    environment:
+      GEOIP_PROVIDER: ${GEOIP_PROVIDER:-maxmind}
+      DATA_DIR: /data
+      ISP_FROM_ASN: ${ISP_FROM_ASN:-false}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      PROXY_HEADER: ${PROXY_HEADER:-X-Forwarded-For}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-300}
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-20}
+      RATE_LIMIT_MAX_CLIENTS: ${RATE_LIMIT_MAX_CLIENTS:-50000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    volumes:
+      - ${DATA_VOLUME:-databases}:/data:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    networks: [service]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  updater:
+    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    entrypoint: ["/usr/local/bin/updater"]
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      GEOIP_PROVIDER: ${GEOIP_PROVIDER:-maxmind}
+      DATA_DIR: /data
+      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-24h}
+      MAXMIND_ACCOUNT_ID: ${MAXMIND_ACCOUNT_ID:-}
+      MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:-}
+      MAXMIND_ACCOUNT_ID_FILE: ${MAXMIND_ACCOUNT_ID_FILE:-}
+      MAXMIND_LICENSE_KEY_FILE: ${MAXMIND_LICENSE_KEY_FILE:-}
+      GEOIPUPDATE_CONFIG_FILE: ${GEOIPUPDATE_CONFIG_FILE:-}
+      IPINFO_ENABLED: ${IPINFO_ENABLED:-false}
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+      IPINFO_TOKEN_FILE: ${IPINFO_TOKEN_FILE:-}
+    volumes:
+      - ${DATA_VOLUME:-databases}:/data
+      - ./secrets:/run/secrets:ro
+    read_only: true
+    tmpfs: [/tmp:size=16m,mode=1777]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 768m
+    networks: [service]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+volumes:
+  databases:
+networks:
+  service:
