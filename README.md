@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="docs/REFERENCE.md">Documentation</a> ·
-  <a href="deploy/PRODUCTION.md">Deployment</a> ·
+  <a href="DEPLOYMENT.md">Deployment</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
@@ -25,19 +25,7 @@ Requires Docker and Docker Compose—no source checkout or Go installation.
 
 ```bash
 mkdir -p myip && cd myip
-curl -fsSLo compose.yml https://raw.githubusercontent.com/TrueFix/ip/main/compose.yml
-curl -fsSLo .env.example https://raw.githubusercontent.com/TrueFix/ip/main/.env.example
-cp -n .env.example .env
-mkdir -p secrets
-```
-
-Set this in `.env` for credential-free lookups:
-
-```dotenv
-GEOIP_PROVIDER=dbip
-```
-
-```bash
+curl -fsSLo compose.yml https://raw.githubusercontent.com/TrueFix/ip/main/deploy/compose.dbip.yml
 docker compose pull
 docker compose up -d
 curl http://localhost:8080/8.8.8.8
@@ -45,6 +33,10 @@ curl http://localhost:8080/8.8.8.8
 
 The first database download takes a little time; `/healthz` returns `503` until ready.
 Localhost itself is not a public IP, so use an explicit IP for local testing.
+
+No credentials or `.env` needed for this DB-IP template. For MaxMind, use the
+[easy deployment guide](DEPLOYMENT.md)—its template requires both credentials
+before Compose will start.
 
 Both containers use **[mayankfawkes/ip](https://hub.docker.com/r/mayankfawkes/ip)**
 (amd64/arm64). Pin a release with `IMAGE_TAG=v0.1.0`; otherwise `latest` selects
@@ -54,8 +46,8 @@ the latest stable release. Images become available after the first version-tag p
 
 | Setting | Behavior |
 | --- | --- |
-| `GEOIP_PROVIDER=maxmind` | MaxMind primary + DB-IP fallback; MaxMind credentials required. |
-| `GEOIP_PROVIDER=dbip` | DB-IP only; no account needed. |
+| [MaxMind template](deploy/compose.maxmind.yml) | MaxMind primary + DB-IP fallback; account ID and license key required. |
+| [DB-IP template](deploy/compose.dbip.yml) | DB-IP only; no account needed. |
 | `IPINFO_ENABLED=true` | Optional network enrichment in MaxMind mode; free IPinfo token required. |
 
 Locations are approximate. Missing data stays `null`—never guessed.

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add a short deployment guide and standalone DB-IP/MaxMind Compose templates.
+- Require both MaxMind credentials at Compose validation time for the hybrid template.
+- Remove the redundant minimal Compose file.
+- Allow switching database providers without comparing their independent build dates.
+
 ## v0.1.3 — 2026-11-04
 
 - Expand raw API releases to 20 OS/CPU targets across Linux, macOS and Windows.

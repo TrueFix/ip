@@ -1,0 +1,35 @@
+services:
+  api:
+    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+    environment:
+      GEOIP_PROVIDER: maxmind
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      PROXY_HEADER: ${PROXY_HEADER:-X-Forwarded-For}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-300}
+      ISP_FROM_ASN: ${ISP_FROM_ASN:-false}
+    volumes:
+      - databases:/data:ro
+    read_only: true
+
+  updater:
+    image: mayankfawkes/ip:${IMAGE_TAG:-latest}
+    entrypoint: ["/usr/local/bin/updater"]
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    environment:
+      GEOIP_PROVIDER: maxmind
+      MAXMIND_ACCOUNT_ID: ${MAXMIND_ACCOUNT_ID:?Set MAXMIND_ACCOUNT_ID in .env}
+      MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:?Set MAXMIND_LICENSE_KEY in .env}
+      IPINFO_ENABLED: ${IPINFO_ENABLED:-false}
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-24h}
+    volumes:
+      - databases:/data
+
+volumes:
+  databases:

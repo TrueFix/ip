@@ -50,6 +50,11 @@ func (t *tracking) collect(provider string, hybrid, ipinfo bool) ([]inventory.Fi
 			return nil, err
 		}
 		old, exists := t.previous[f.Path]
+		// Providers can use the same snapshot filenames but have independent
+		// release clocks. Switching modes must not look like a downgrade.
+		if exists && (old.Provider != f.Provider || old.Edition != f.Edition) {
+			exists = false
+		}
 		if exists && old.BuildEpoch > f.BuildEpoch {
 			return nil, errors.New("database build timestamp moved backwards")
 		}

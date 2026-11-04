@@ -16,6 +16,7 @@ import (
 
 	"github.com/TrueFix/myip/internal/audit"
 	"github.com/TrueFix/myip/internal/geo"
+	"github.com/TrueFix/myip/internal/inventory"
 	"github.com/gofrs/flock"
 )
 
@@ -115,6 +116,36 @@ func TestDBIPPublicationAndConditionalRefresh(t *testing.T) {
 	}
 	if err := u.Run(context.Background()); err != nil {
 		t.Fatal("corrupt cache not repaired", err)
+	}
+}
+
+func TestProviderSwitchUsesIndependentBuildDates(t *testing.T) {
+	dir := t.TempDir()
+	previous := geo.Manifest{Provider: "maxmind", Version: "old-snapshot"}
+	for _, edition := range []string{"City", "ASN"} {
+		fixture := "GeoIP2-City-Test.mmdb"
+		if edition == "ASN" {
+			fixture = "GeoLite2-ASN-Test.mmdb"
+		}
+		b, err := os.ReadFile(filepath.Join("..", "geo", "testdata", fixture))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, edition+".mmdb"), b, 0644); err != nil {
+			t.Fatal(err)
+		}
+		previous.Files = append(previous.Files, inventory.File{Provider: "maxmind", Edition: strings.ToLower(edition), Path: edition + ".mmdb", BuildEpoch: ^uint(0)})
+	}
+	tracking := newTracking(t.TempDir(), dir, previous)
+	if _, err := tracking.collect("dbip", false, false); err != nil {
+		t.Fatal("different provider was treated as a rollback", err)
+	}
+	for key, record := range tracking.previous {
+		record.Provider = "dbip"
+		tracking.previous[key] = record
+	}
+	if _, err := tracking.collect("dbip", false, false); err == nil {
+		t.Fatal("same-provider rollback no longer rejected")
 	}
 }
 
