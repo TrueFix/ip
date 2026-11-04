@@ -3,7 +3,7 @@ module github.com/TrueFix/myip
 go 1.27.3
 
 require (
-	github.com/gofrs/flock v0.13.0
+	github.com/gofrs/flock v0.13.1
 	github.com/maxmind/mmdbwriter v1.2.0
 	github.com/oschwald/maxminddb-golang v1.13.0
 	github.com/prometheus/client_golang v1.25.0
