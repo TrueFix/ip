@@ -120,7 +120,7 @@ sanitized headers; see `deploy/nginx.conf` and the README proxy section.
 
 Download `compose.yml` and `.env.example` as shown in README.md; the server needs
 only these configuration files, not a source checkout. Pin a published version
-by setting both `image:` entries to `mayankfawkes/ip:v0.1.3`, then:
+by setting both `image:` entries to `mayankfawkes/ip:v0.1.4`, then:
 
 ```sh
 docker compose config --quiet
@@ -185,3 +185,14 @@ Rate limits are process-local memory budgets. Restarting resets them; multiple
 replicas do not share a global quota. Keep edge controls or introduce a shared
 limiter if a globally enforced quota is required. SQLite audits are not a
 distributed rate-limit implementation.
+
+| Variable | Default | Operational effect |
+| --- | --- | --- |
+| `RATELIMIT_ENABLE` | `true` | Set `false` to bypass RPM, RPS and client-capacity limits without tracking client buckets. Does not disable edge limits. |
+| `RATE_LIMIT_RPM` | `300` | Rolling-minute budget when enabled; `0` admits no rate-limited requests (HTTP 429). Only the boolean switch disables limiting. |
+
+After changing `.env`, run `docker compose up -d` to recreate the API container.
+Re-enable with `RATELIMIT_ENABLE=true` and positive RPM. Other rate-limit settings
+are still validated when disabled. Deploy **v0.1.4 or newer**; older releases
+ignore the switch. Verify the deployed version before relying on the setting.
+See [all rate-limit settings](../docs/ENVIRONMENT.md#5-rate-limiting--no-authentication).

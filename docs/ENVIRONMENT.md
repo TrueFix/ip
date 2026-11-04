@@ -90,7 +90,8 @@ the credentials of whichever sources you enabled.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `RATE_LIMIT_RPM` | `300` | Accepted requests per client per rolling minute; integer 0–100000. **`0` disables all built-in limiting**, including RPS, capacity restrictions and client tracking. |
+| `RATELIMIT_ENABLE` | `true` | Set `false` to disable **all** built-in throttling and client tracking, regardless of RPM/RPS settings. |
+| `RATE_LIMIT_RPM` | `300` | Accepted requests per client per rolling minute; integer 0–100000. **`0` allows no rate-limited requests** when limiting is enabled (HTTP 429). |
 | `RATE_LIMIT_RPS` | Unset | Optional additional per-second token bucket; positive number up to 100000. Does not replace RPM. |
 | `RATE_LIMIT_BURST` | `20` | RPS burst allowance; integer 1–100000. No throttling effect unless RPS is set. |
 | `RATE_LIMIT_MAX_CLIENTS` | `50000` | Maximum tracked client keys; integer 1–1000000. New keys receive 429 when full. Bounds memory usage. |
@@ -98,12 +99,25 @@ the credentials of whichever sources you enabled.
 Disable all built-in limits with:
 
 ```dotenv
-RATE_LIMIT_RPM=0
+RATELIMIT_ENABLE=false
 ```
 
-This requires an application version containing zero-RPM support; older releases
-that reject zero must be upgraded first. Other rate-limit settings must still
-contain valid values, but do not enforce limits while RPM is zero.
+This requires **v0.1.4 or newer**; older releases ignore the boolean switch and
+reject zero RPM. Other rate-limit settings must still contain
+valid values, but do not enforce limits when disabled. `RATELIMIT_ENABLE` is the
+only on/off switch. With it set to `true`, RPM zero rejects all rate-limited
+requests; readiness, private monitoring and CORS preflight remain exempt.
+
+| `RATELIMIT_ENABLE` | `RATE_LIMIT_RPM` | Result |
+| --- | --- | --- |
+| `true` | `300` | Enforce 300 requests per client per rolling minute, plus any RPS limit |
+| `true` | `0` | Reject every rate-limited request with HTTP 429 |
+| `false` | Any valid value, including `0` | Bypass all built-in limiting and client tracking |
+
+After changing the switch in `.env`, run `docker compose up -d` to recreate the
+API service. A container restart alone does not load changed Compose environment
+values. For native binaries, update the exported environment/service settings and
+restart the process. The switch does not change limits at an upstream proxy.
 
 Limits are per process, reset on restart, and group IPv6 addresses by /64.
 No rate-limit visitor IPs are written to SQLite. Keep edge-level protection for
@@ -141,7 +155,7 @@ variable automatically. An unsupported override in `.env` alone has no effect.
 | MaxMind account ID + license key | Not used | Required | Required in MaxMind mode |
 | IPinfo enable + token + ISP switch | Not used | Supported | Supported in MaxMind mode |
 | Update interval | Supported | Supported | Supported |
-| Proxy trust/header, allowed hosts, RPM | Supported | Supported | Supported |
+| Proxy trust/header, allowed hosts, rate-limit switch, RPM | Supported | Supported | Supported |
 | RPS, burst, client capacity, CORS | Application defaults | Application defaults | Configurable |
 | Credential `_FILE` settings / legacy config | Not forwarded | Not forwarded | Supported; host `./secrets` mounted at `/run/secrets` |
 | Data directory and process listeners | Image defaults | Image defaults | Fixed data directory; image listener defaults |

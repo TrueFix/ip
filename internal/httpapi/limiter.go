@@ -14,6 +14,7 @@ type clientBucket struct {
 	head, count int
 }
 type Limiter struct {
+	disabled                             bool
 	mu                                   sync.Mutex
 	clients                              map[netip.Addr]*clientBucket
 	rps                                  rate.Limit
@@ -34,8 +35,8 @@ func (l *Limiter) Allow(ip netip.Addr, now time.Time) bool {
 // RPM is a strict rolling-minute budget. Optional RPS is an additional token
 // bucket with configurable burst, not a replacement for the minute budget.
 func (l *Limiter) AllowWithRetry(ip netip.Addr, now time.Time) (bool, time.Duration) {
-	// Zero disables every limiter, including RPS and client capacity tracking.
-	if l.rpm == 0 {
+	// Only the explicit enable switch bypasses limiting and client tracking.
+	if l.disabled {
 		return true, 0
 	}
 	if ip.Is6() {
@@ -43,6 +44,10 @@ func (l *Limiter) AllowWithRetry(ip netip.Addr, now time.Time) (bool, time.Durat
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.rpm == 0 {
+		l.deniedRPM++
+		return false, time.Minute
+	}
 	if l.epoch.IsZero() {
 		l.epoch = now
 	}

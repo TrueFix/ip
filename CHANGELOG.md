@@ -1,15 +1,13 @@
 # Changelog
 
-## Unreleased
+## v0.1.4 — 2026-11-04
 
+- Add `RATELIMIT_ENABLE` (default `true`) to disable all built-in limiting with `false`.
 - Present configuration in source-specific tables with explicit authentication requirements and local ISP examples.
-
 - Remove Docker-only environment overrides; configure image tags, ports and mounts directly in Compose.
-- Support `RATE_LIMIT_RPM=0` to disable all built-in throttling and client tracking.
-
+- Interpret `RATE_LIMIT_RPM=0` as zero allowed requests; only `RATELIMIT_ENABLE=false` disables limiting.
 - Separate source-specific environment examples and document every runtime/Compose setting.
 - Reduce the root environment example to credential-free DB-IP with optional overrides commented out.
-
 - Add a short deployment guide and standalone DB-IP/MaxMind Compose templates.
 - Require both MaxMind credentials at Compose validation time for the hybrid template.
 - Remove the redundant minimal Compose file.

@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	RateLimitDisabled                                     bool
 	ISPFromASN                                            bool
 	Listen, MetricsListen, DataDir, Provider, ProxyHeader string
 	TrustedProxies                                        []netip.Prefix
@@ -30,6 +31,11 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	c := Config{Listen: Env("LISTEN_ADDR", ":8080"), MetricsListen: Env("METRICS_ADDR", "127.0.0.1:9090"), DataDir: r.DataDir, Provider: r.Provider, ISPFromASN: r.ISPFromASN, ProxyHeader: Env("PROXY_HEADER", "X-Forwarded-For"), CORSOrigin: Env("CORS_ORIGIN", "*")}
+	enabled, err := strconv.ParseBool(Env("RATELIMIT_ENABLE", "true"))
+	if err != nil {
+		return c, fmt.Errorf("RATELIMIT_ENABLE must be true or false")
+	}
+	c.RateLimitDisabled = !enabled
 	for _, raw := range strings.Split(os.Getenv("TRUSTED_PROXIES"), ",") {
 		if raw = strings.TrimSpace(raw); raw != "" {
 			p, err := netip.ParsePrefix(raw)
@@ -46,7 +52,7 @@ func LoadConfig() (Config, error) {
 	}
 	c.RPM, err = strconv.Atoi(Env("RATE_LIMIT_RPM", "300"))
 	if err != nil || c.RPM < 0 || c.RPM > 100000 {
-		return c, fmt.Errorf("RATE_LIMIT_RPM must be in [0,100000] (0 disables all rate limiting)")
+		return c, fmt.Errorf("RATE_LIMIT_RPM must be in [0,100000] (0 allows no rate-limited requests)")
 	}
 	if raw := os.Getenv("RATE_LIMIT_RPS"); raw != "" {
 		c.Rate, err = strconv.ParseFloat(raw, 64)

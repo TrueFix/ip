@@ -72,6 +72,9 @@ Response links automatically follow the request’s host and scheme. No base URL
 
 Keep port **9090 private**, configure HTTPS and trust only your actual reverse proxy.
 Rate limits are **per-process memory budgets**; they reset on restart and are not shared across replicas.
+Set `RATELIMIT_ENABLE=false` in `.env` to disable all built-in limiting, then
+run `docker compose up -d`. Default: `true`. Requires **v0.1.4 or newer**;
+keep edge protection. See [rate-limit settings](docs/ENVIRONMENT.md#5-rate-limiting--no-authentication).
 
 Keep `.env`, tokens and downloaded data out of Git. Data defaults to `./data` locally and `/data` in Docker.
 

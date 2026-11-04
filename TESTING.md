@@ -2,6 +2,10 @@
 
 Verified on 2026-11-04:
 
+- v0.1.4 pre-release checks: `make check`, `make audit`, workflow actionlint,
+  documentation links/anchors, and all 20 raw-binary cross-builds/checksums passed.
+  Native execution on macOS/Windows and container startup were not reverified.
+
 - `go test -race -cover ./...` — passed.
 - `go vet ./...` — passed.
 - `go build ./cmd/...` — passed.
@@ -66,6 +70,11 @@ Verified on 2026-11-04:
   missing/invalid inventories, audit crash recovery, missing audit-history
   rejection, bounded retention preserving the active snapshot, and process-local
   rate-limit metrics. Tests do not assert publisher-signature authenticity.
+- Rate-limit switch tests cover default/explicit enablement, disabling with
+  positive RPM/RPS settings, bypassing client capacity without tracking clients,
+  invalid boolean rejection, and forwarding `RATELIMIT_ENABLE=false` through all
+  supplied Compose templates. Zero RPM rejects every rate-limited request when
+  enabled; the boolean disable switch bypasses even a zero budget.
 - The response schema no longer contains `postal`; serialization tests enforce
   its absence even when source databases contain a postal code.
 - There is one workflow, `publish.yml`, with Docker Hub publishing and GitHub

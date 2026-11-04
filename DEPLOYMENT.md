@@ -96,11 +96,30 @@ docker compose up -d
 ```
 
 To pin a release instead of `latest`, edit **both** `image:` entries in
-`compose.yml`, for example to `mayankfawkes/ip:v0.1.3`. Host port, bind address
+`compose.yml`, for example to `mayankfawkes/ip:v0.1.4`. Host port, bind address
 and storage are configured directly in Compose, not through `.env`.
 
-To disable all built-in rate limiting, add `RATE_LIMIT_RPM=0` to `.env`.
-Keep edge-level protection for a public service.
+### Optional · Enable or disable rate limiting
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `RATELIMIT_ENABLE` | `true` | `false` disables all built-in RPM/RPS limits, capacity restrictions and client tracking. |
+| `RATE_LIMIT_RPM` | `300` | Rolling-minute request budget per client when limiting is enabled. |
+
+To disable limiting, add this to `.env` beside `compose.yml`:
+
+```dotenv
+RATELIMIT_ENABLE=false
+```
+
+Then run `docker compose up -d`. To re-enable, set `RATELIMIT_ENABLE=true`
+and run the command again. Use a positive `RATE_LIMIT_RPM` (for example `300`)
+to admit requests. When enabled, RPM `0` rejects every rate-limited request with
+HTTP 429. Only `RATELIMIT_ENABLE=false` disables limiting.
+
+The switch requires **v0.1.4 or newer**: older images ignore the boolean setting.
+Pull an updated image before relying on it. Keep edge-level protection
+for a public service; this setting does not change Cloudflare/Nginx limits.
 
 These are standalone, simplified templates—not Compose override files. Choose
 one and save it as `compose.yml`. Keep the same deployment directory/volume

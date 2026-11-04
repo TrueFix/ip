@@ -62,6 +62,56 @@ func request(h http.Handler, path string) *httptest.ResponseRecorder {
 	h.ServeHTTP(w, r)
 	return w
 }
+
+func TestDisabledRateLimitsAllowRepeatedHTTPRequests(t *testing.T) {
+	c := testConfig(t)
+	c.RateLimitDisabled = true
+	c.RPM, c.Rate, c.Burst, c.MaxClients = 1, 1, 1, 1
+	s := New(c, fakeStore{ready: true})
+	h := s.Handler()
+	for i := range 100 {
+		r := httptest.NewRequest("GET", "/8.8.8.8", nil)
+		if i%2 == 0 {
+			r.RemoteAddr = "8.8.8.8:12345"
+		} else {
+			r.RemoteAddr = "1.1.1.1:12345"
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != http.StatusOK || w.Header().Get("Retry-After") != "" {
+			t.Fatalf("disabled limits affected HTTP response: %d %s", w.Code, w.Body.String())
+		}
+	}
+	if s.limiter.Stats() != (LimitStats{}) {
+		t.Fatal("disabled HTTP limiter tracked clients")
+	}
+}
+
+func TestZeroRPMHTTPBehavior(t *testing.T) {
+	for _, disabled := range []bool{false, true} {
+		c := testConfig(t)
+		c.RPM = 0
+		c.RateLimitDisabled = disabled
+		s := New(c, fakeStore{ready: true})
+		h := s.Handler()
+		for range 3 {
+			w := request(h, "/8.8.8.8")
+			if disabled {
+				if w.Code != http.StatusOK {
+					t.Fatalf("disabled zero-RPM lookup: %d", w.Code)
+				}
+			} else if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "" {
+				t.Fatalf("enabled zero-RPM lookup: %d, Retry-After=%s", w.Code, w.Header().Get("Retry-After"))
+			}
+		}
+		if w := request(h, "/healthz"); w.Code != http.StatusOK {
+			t.Fatalf("zero RPM blocked readiness: %d", w.Code)
+		}
+		if w := request(s.MetricsHandler(), "/metrics"); w.Code != http.StatusOK {
+			t.Fatalf("zero RPM blocked metrics: %d", w.Code)
+		}
+	}
+}
 func TestRoutes(t *testing.T) {
 	s := New(testConfig(t), fakeStore{ready: true})
 	h := s.Handler()

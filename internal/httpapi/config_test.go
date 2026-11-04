@@ -1,6 +1,54 @@
 package httpapi
 
-import "testing"
+import (
+	"net/netip"
+	"testing"
+	"time"
+)
+
+func TestRateLimitEnableSwitch(t *testing.T) {
+	t.Setenv("RATE_LIMIT_RPM", "1")
+	t.Setenv("RATE_LIMIT_RPS", "1")
+	t.Setenv("RATE_LIMIT_BURST", "1")
+	t.Setenv("RATE_LIMIT_MAX_CLIENTS", "1")
+	for _, value := range []string{"", "true", "false"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("RATELIMIT_ENABLE", value)
+			c, err := LoadConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.RateLimitDisabled != (value == "false") {
+				t.Fatal("incorrect enable switch")
+			}
+			s := New(c, nil)
+			now := time.Now()
+			ip := netip.MustParseAddr("8.8.8.8")
+			if !s.limiter.Allow(ip, now) {
+				t.Fatal("first request denied")
+			}
+			if value == "false" {
+				for range 1000 {
+					if ok, retry := s.limiter.AllowWithRetry(ip, now); !ok || retry != 0 {
+						t.Fatal("disabled limiter denied a request")
+					}
+				}
+				if !s.limiter.Allow(netip.MustParseAddr("1.1.1.1"), now) {
+					t.Fatal("disabled capacity limit enforced")
+				}
+				if s.limiter.Stats() != (LimitStats{}) {
+					t.Fatal("disabled limiter tracked clients")
+				}
+			} else if s.limiter.Allow(ip, now) {
+				t.Fatal("enabled limiter bypassed")
+			}
+		})
+	}
+	t.Setenv("RATELIMIT_ENABLE", "invalid")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("invalid boolean accepted")
+	}
+}
 
 func TestRPMDefaultsAndOptionalRPS(t *testing.T) {
 	t.Setenv("RATE_LIMIT_RPM", "")
@@ -21,7 +69,7 @@ func TestRPMDefaultsAndOptionalRPS(t *testing.T) {
 	t.Setenv("RATE_LIMIT_RPM", "0")
 	c, err = LoadConfig()
 	if err != nil || c.RPM != 0 {
-		t.Fatalf("disabled rate limiting not accepted: %v", err)
+		t.Fatalf("zero request budget not accepted: %v", err)
 	}
 	for _, value := range []string{"-1", "NaN", "100001"} {
 		t.Setenv("RATE_LIMIT_RPM", value)

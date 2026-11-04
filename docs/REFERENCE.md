@@ -379,9 +379,11 @@ volume there. Edit Compose volume mounts directly if you need a host bind mount;
 the non-root updater must have write permission. Edit Compose `ports:` directly
 to change the host bind address/port, not the process listener.
 
-Set `RATE_LIMIT_RPM=0` to bypass RPM, RPS and client-capacity limits entirely,
-without tracking client buckets. Other rate-limit values still must be valid,
-but have no limiting effect while RPM is zero.
+Set `RATELIMIT_ENABLE=false` to bypass RPM, RPS and client-capacity limits entirely,
+without tracking client buckets. It defaults to `true`. Other rate-limit values
+still must be valid, but have no limiting effect while disabled.
+With limiting enabled, `RATE_LIMIT_RPM=0` means zero allowed requests (HTTP 429),
+not disabled limiting. Readiness, private monitoring and CORS preflight stay exempt.
 
 RPM and RPS are cumulative restrictions when both are set. For example,
 `RATE_LIMIT_RPM=60`, `RATE_LIMIT_RPS=2`, `RATE_LIMIT_BURST=5` allows at most 60

@@ -26,8 +26,9 @@ func TestRollingMinuteBudget(t *testing.T) {
 	}
 }
 
-func TestZeroRPMDisablesAllLimits(t *testing.T) {
+func TestDisabledLimiterBypassesAllLimits(t *testing.T) {
 	l := NewLimiter(0, 1, 1, 1)
+	l.disabled = true
 	now := time.Now()
 	for _, address := range []string{"8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"} {
 		for range 1000 {
@@ -38,6 +39,21 @@ func TestZeroRPMDisablesAllLimits(t *testing.T) {
 	}
 	if stats := l.Stats(); stats != (LimitStats{}) {
 		t.Fatalf("disabled limiter tracked clients or denials: %+v", stats)
+	}
+}
+
+func TestZeroRPMRejectsAllRequests(t *testing.T) {
+	l := NewLimiter(0, 1, 1, 1)
+	now := time.Now()
+	for _, address := range []string{"8.8.8.8", "1.1.1.1"} {
+		for _, elapsed := range []time.Duration{0, time.Minute, time.Hour} {
+			if allowed, retry := l.AllowWithRetry(netip.MustParseAddr(address), now.Add(elapsed)); allowed || retry != time.Minute {
+				t.Fatalf("zero RPM accepted request or incorrect retry: %v %s", allowed, retry)
+			}
+		}
+	}
+	if stats := l.Stats(); stats.Clients != 0 || stats.DeniedRPM != 6 {
+		t.Fatalf("unexpected zero-RPM accounting: %+v", stats)
 	}
 }
 

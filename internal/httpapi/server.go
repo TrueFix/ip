@@ -37,7 +37,9 @@ type Server struct {
 }
 
 func New(c Config, store Lookup) *Server {
-	s := &Server{Config: c, Store: store, limiter: NewLimiter(c.RPM, c.Rate, c.Burst, c.MaxClients), Registry: prometheus.NewRegistry()}
+	limiter := NewLimiter(c.RPM, c.Rate, c.Burst, c.MaxClients)
+	limiter.disabled = c.RateLimitDisabled
+	s := &Server{Config: c, Store: store, limiter: limiter, Registry: prometheus.NewRegistry()}
 	s.requests = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "myip_http_requests_total", Help: "HTTP requests by bounded route, method and status."}, []string{"route", "method", "status"})
 	s.duration = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "myip_http_request_duration_seconds", Help: "HTTP response latency.", Buckets: prometheus.DefBuckets}, []string{"route"})
 	s.lookups = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "myip_lookups_total", Help: "IP lookup outcomes."}, []string{"result"})

@@ -10,6 +10,7 @@ services:
       PROXY_HEADER: ${PROXY_HEADER:-X-Forwarded-For}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-300}
+      RATELIMIT_ENABLE: ${RATELIMIT_ENABLE:-true}
     volumes:
       - databases:/data:ro
     read_only: true

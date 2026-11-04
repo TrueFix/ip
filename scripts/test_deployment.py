@@ -97,10 +97,12 @@ class DeploymentTest(unittest.TestCase):
                     "IMAGE_TAG": "unused", "BIND_ADDRESS": "0.0.0.0",
                     "PORT": "9999", "DATA_VOLUME": "/unused",
                     "RATE_LIMIT_RPM": "0",
+                    "RATELIMIT_ENABLE": "false",
                 })
                 self.assertEqual(result.returncode, 0, result.stderr)
                 services = json.loads(result.stdout)["services"]
                 self.assertEqual(services["api"]["environment"]["RATE_LIMIT_RPM"], "0")
+                self.assertEqual(services["api"]["environment"]["RATELIMIT_ENABLE"], "false")
                 self.assertEqual(services["api"]["ports"][0]["host_ip"], "127.0.0.1")
                 self.assertEqual(str(services["api"]["ports"][0]["published"]), "8080")
                 for service in services.values():
